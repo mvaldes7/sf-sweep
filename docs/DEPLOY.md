@@ -7,12 +7,10 @@ Everything here fits the Cloudflare free plan. Do not enable Workers Paid, custo
 | Resource | Type | ID / URL | State |
 | --- | --- | --- | --- |
 | `sf-sweep` | D1 database | `6e39009c-f6fa-4e1f-837a-b866fcdd189c` | created, `worker/schema.sql` applied |
-| `sf-sweep-alerts` | Worker | script `sf-sweep-alerts` | uploaded with D1 binding, vars and the `VAPID_PRIVATE_KEY` secret |
+| `sf-sweep-alerts` | Worker | https://sf-sweep-alerts.miggyman7.workers.dev | uploaded with D1 binding, vars and the `VAPID_PRIVATE_KEY` secret; cron `* * * * *` set; `/api/health` ok |
 
 Not created yet (blocked, needs Mike in the dashboard):
 
-- **workers.dev subdomain**: the account has none, and Cloudflare refuses cron triggers without one.
-- **Cron trigger** `* * * * *` on `sf-sweep-alerts` (blocked by the above).
 - **R2 bucket** `sf-sweep-data`: R2 is not enabled on the account ("Please enable R2 through the Cloudflare Dashboard").
 - **Pages project** `sf-sweep`: the connector was not granted Pages permission.
 
