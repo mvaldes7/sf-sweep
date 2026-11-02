@@ -7,12 +7,12 @@ Everything here fits the Cloudflare free plan. Do not enable Workers Paid, custo
 | Resource | Type | ID / URL | State |
 | --- | --- | --- | --- |
 | `sf-sweep` | D1 database | `6e39009c-f6fa-4e1f-837a-b866fcdd189c` | created, `worker/schema.sql` applied |
+| `sf-sweep` | Pages project | https://sf-sweep.pages.dev (preview: https://feat-v1.sf-sweep.pages.dev) | created 2026-11-02, production branch main; only a feat-v1 preview deployed |
 | `sf-sweep-alerts` | Worker | https://sf-sweep-alerts.miggyman7.workers.dev | uploaded with D1 binding, vars and the `VAPID_PRIVATE_KEY` secret; cron `* * * * *` set; `/api/health` ok |
 
 Not created yet (blocked, needs Mike in the dashboard):
 
 - **R2 bucket** `sf-sweep-data`: R2 is not enabled on the account ("Please enable R2 through the Cloudflare Dashboard").
-- **Pages project** `sf-sweep`: the connector was not granted Pages permission.
 
 ## Steps for Mike
 
