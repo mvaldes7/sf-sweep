@@ -1,0 +1,4 @@
+# Cloudflare Pages project for the PWA (static build output).
+name = "sf-sweep"
+pages_build_output_dir = "dist"
+compatibility_date = "2025-06-01"
