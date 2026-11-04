@@ -153,3 +153,25 @@ describe("labels and encoding", () => {
     expect(searchStreets(sides, "g")).toEqual([]);
   });
 });
+
+describe("overnight windows crossing midnight", () => {
+  // Fri 22:00 - Sat 02:00 (scheduled on Friday)
+  const r = rule({ day: 5, from: 22, to: 2 });
+  it("is active before and after midnight, attributed to the start date", () => {
+    expect(activeAt([r], pst("2026-11-06T23:30:00"), none)).toBe(true); // Fri
+    expect(activeAt([r], pst("2026-11-07T01:30:00"), none)).toBe(true); // Sat tail
+    expect(activeAt([r], pst("2026-11-07T02:00:00"), none)).toBe(false);
+    expect(activeAt([r], pst("2026-11-06T01:30:00"), none)).toBe(false); // Fri early = Thu tail, not scheduled
+  });
+  it("status and nextSweep span midnight", () => {
+    expect(statusAt([r], pst("2026-11-07T00:30:00"), none)).toBe("now");
+    const n = nextSweep([r], pst("2026-11-06T12:00:00"), none)!;
+    expect(n.start).toBe(pst("2026-11-06T22:00:00").getTime());
+    expect(n.end).toBe(pst("2026-11-07T02:00:00").getTime());
+  });
+  it("week-of-month is taken from the start date", () => {
+    const wk1 = rule({ day: 6, from: 23, to: 1, weeks: [true, false, false, false, false] }); // 1st Sat
+    expect(activeAt([wk1], pst("2026-11-08T00:30:00"), none)).toBe(true); // Sun Nov 8 tail of Sat Nov 7
+    expect(activeAt([wk1], pst("2026-11-15T00:30:00"), none)).toBe(false);
+  });
+});

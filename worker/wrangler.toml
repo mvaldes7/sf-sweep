@@ -8,7 +8,7 @@ workers_dev = true
 crons = ["* * * * *"]
 
 [vars]
-ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,*.sf-sweep.pages.dev,http://localhost:5173"
+ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
 VAPID_SUBJECT = "mailto:50187212+mvaldes7@users.noreply.github.com"
 # Public by design (also used by the PWA as VITE_VAPID_PUBLIC_KEY). The private key is a Worker secret only.
 VAPID_PUBLIC_KEY = "BE6iQboqVxUiqB7ZeoTd-Q6esJd_94lv3OxOg-8Mp51gqhdJZ7LIZ10wBmXPT9UnYersLDSDqkd1QYp4L72y6LI"
@@ -20,3 +20,23 @@ database_id = "6e39009c-f6fa-4e1f-837a-b866fcdd189c"
 
 # R2 is not enabled on the account yet (API: "Please enable R2 through the Cloudflare Dashboard").
 # The Worker does not need R2; the bucket "sf-sweep-data" serves static data to the PWA. See docs/DEPLOY.md.
+
+# Rate limiting (free plan). NOT ENABLED: needs Mike's OK before the next deploy. The namespace_id is an
+# account-unique integer chosen here (no API call or dashboard step creates it), but it is a new binding.
+# Without it the Worker falls back to a per-isolate in-memory limiter (best effort only).
+# [[ratelimits]]
+# name = "API_LIMITER"
+# namespace_id = "1801"
+# simple = { limit = 30, period = 60 }
+
+# Local development only: `wrangler dev --env dev`. Adds localhost to the allowed origins.
+[env.dev]
+[env.dev.vars]
+ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev,http://localhost:5173"
+VAPID_SUBJECT = "mailto:50187212+mvaldes7@users.noreply.github.com"
+VAPID_PUBLIC_KEY = "BE6iQboqVxUiqB7ZeoTd-Q6esJd_94lv3OxOg-8Mp51gqhdJZ7LIZ10wBmXPT9UnYersLDSDqkd1QYp4L72y6LI"
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "sf-sweep"
+database_id = "6e39009c-f6fa-4e1f-837a-b866fcdd189c"

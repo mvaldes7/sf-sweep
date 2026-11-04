@@ -22,6 +22,7 @@
     "tests"
   ],
   "exclude": [
-    "tests/worker.test.ts"
+    "tests/worker.test.ts",
+    "tests/worker-hardening.test.ts"
   ]
 }

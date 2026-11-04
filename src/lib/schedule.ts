@@ -13,6 +13,8 @@
 
 export const TZ = "America/Los_Angeles";
 export const AMBER_WINDOW_MIN = 60;
+const MIN = 60_000;
+const HOUR = 3_600_000;
 
 export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday
 export interface Rule {
@@ -68,9 +70,26 @@ export class HolidayTable {
   get(ymd: string): Holiday | undefined { return this.byDate.get(ymd); }
 }
 
+/** A window like 22-2 crosses midnight: it starts on the scheduled date and ends on the next day. */
+export function crossesMidnight(rule: Rule): boolean {
+  return rule.to > 0 && rule.to < rule.from;
+}
+/** Hour falls in the part of the window that belongs to the scheduled (start) date. */
 function inWindow(rule: Rule, h: number): boolean {
-  const to = rule.to <= rule.from ? 24 : rule.to;
+  const to = rule.to === 0 || crossesMidnight(rule) ? 24 : rule.to;
   return h >= rule.from && h < to;
+}
+/** Hour falls in the after-midnight tail of a crossing window (belongs to the previous date). */
+function inTail(rule: Rule, h: number): boolean {
+  return crossesMidnight(rule) && h < rule.to;
+}
+function partsActive(rule: Rule, p: LocalParts, prev: () => LocalParts, hol: HolidayTable): boolean {
+  if (inWindow(rule, p.h) && ruleAppliesOnDate(rule, p, hol)) return true;
+  return inTail(rule, p.h) && ruleAppliesOnDate(rule, prev(), hol);
+}
+/** Local parts of a time on the previous local date (one minute before local midnight). */
+function prevDayParts(ms: number, p: LocalParts): LocalParts {
+  return sfParts(ms - (p.h * 60 + p.min + 1) * MIN);
 }
 
 /** Is this rule enforced on the local date given (ignoring the hour)? */
@@ -88,16 +107,15 @@ export function ruleAppliesOnDate(rule: Rule, p: LocalParts, hol: HolidayTable):
 }
 
 export function ruleActiveAt(rule: Rule, t: Date | number, hol: HolidayTable): boolean {
-  const p = sfParts(t);
-  return inWindow(rule, p.h) && ruleAppliesOnDate(rule, p, hol);
+  const ms = typeof t === "number" ? t : t.getTime();
+  const p = sfParts(ms);
+  return partsActive(rule, p, () => prevDayParts(ms, p), hol);
 }
 
 export function activeAt(rules: Rule[], t: Date | number, hol: HolidayTable): boolean {
   return rules.some((r) => ruleActiveAt(r, t, hol));
 }
 
-const MIN = 60_000;
-const HOUR = 3_600_000;
 
 /** Next instant strictly after t that is the top of a local hour. */
 function nextHourBoundary(t: number): number {
@@ -115,15 +133,16 @@ export function statusAt(rules: Rule[], t: Date | number, hol: HolidayTable): St
 }
 
 /** Precomputed local parts for a time t, so many sides can be evaluated with one Intl call. */
-export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number }
+export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts }
 export function clockAt(t: Date | number): Clock {
   const ms = typeof t === "number" ? t : t.getTime();
   const nb = nextHourBoundary(ms);
-  return { now: sfParts(ms), next: sfParts(nb), minsToNext: (nb - ms) / MIN };
+  const now = sfParts(ms), next = sfParts(nb);
+  return { now, next, minsToNext: (nb - ms) / MIN, nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next) };
 }
 export function statusFromClock(rules: Rule[], c: Clock, hol: HolidayTable): Status {
-  if (rules.some((r) => inWindow(r, c.now.h) && ruleAppliesOnDate(r, c.now, hol))) return "now";
-  if (c.minsToNext <= AMBER_WINDOW_MIN && rules.some((r) => inWindow(r, c.next.h) && ruleAppliesOnDate(r, c.next, hol))) return "soon";
+  if (rules.some((r) => partsActive(r, c.now, () => c.nowPrev, hol))) return "now";
+  if (c.minsToNext <= AMBER_WINDOW_MIN && rules.some((r) => partsActive(r, c.next, () => c.nextPrev, hol))) return "soon";
   return "clear";
 }
 
