@@ -2,7 +2,7 @@
 // Fails if any tracked text file contains emoji / pictographic characters.
 import { execSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-const files = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter((f) => f && !/\.(png|jpg|ico|pmtiles)$/.test(f) && f !== "pnpm-lock.yaml");
+const files = execSync("git ls-files", { encoding: "utf8" }).split("\n").filter((f) => f && !/\.(png|jpg|ico|pmtiles|pbf)$/.test(f) && f !== "pnpm-lock.yaml");
 const re = /\p{Extended_Pictographic}|[\u{1F1E6}-\u{1F1FF}]|\uFE0F/u;
 let bad = 0;
 for (const f of files) {
