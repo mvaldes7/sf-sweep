@@ -9,14 +9,15 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build && node scripts/check-asset-size.mjs public/data dist",
+    "build": "tsc --noEmit -p tsconfig.json && vite build && node scripts/check-asset-size.mjs public/data dist && node scripts/check-dist-data.mjs dist",
     "preview": "vite preview",
     "lint": "eslint . && node scripts/check-no-emoji.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p worker/tsconfig.json",
     "data": "node scripts/build-data.mjs",
     "data:sample": "node scripts/build-data.mjs --sample",
-    "basemap": "bash scripts/build-basemap.sh"
+    "basemap": "bash scripts/build-basemap.sh",
+    "deploy:preview": "pnpm build && npx -y wrangler@4 pages deploy dist --project-name sf-sweep --branch feat-v1"
   },
   "dependencies": {
     "maplibre-gl": "^5.6.0",

@@ -50,3 +50,12 @@ bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build and unpack
 `/data/basemap/{z}/{x}/{y}.mvt` (1113 files, about 33 MB uncompressed). Pages does not answer range requests with 206 (tested 2026-11-04), so a single .pmtiles file does not work there. Glyphs are self-hosted in
 `public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable.
 R2 is not used (decision 2026-11-04): all static data, including the basemap, is served by Pages.
+
+## Build guard
+
+`pnpm build` fails with "Missing generated data" unless `dist/data/` has `sweep-index.json`, `sweep-sides.geojson`
+and the basemap tiles (`data/basemap/meta.json`, `0/0/0.mvt`, and z15 tiles). Run `pnpm data` and `pnpm basemap`
+first. CI sets `ALLOW_MISSING_DATA=1` because it has no generated data; never set it for a deploy.
+Deploy a preview with `pnpm deploy:preview` (builds, so the guard runs first). Basemap tiles are stored
+uncompressed (MVT protobuf, not gzip) and served with `Content-Type: application/vnd.mapbox-vector-tile`;
+Pages compresses them on the wire. `public/404.html` makes missing paths return 404 (the app has no client routes).

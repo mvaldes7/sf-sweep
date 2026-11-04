@@ -1,6 +1,6 @@
 // Fails if any file in the given directories exceeds the Cloudflare Pages per-file limit (25 MiB).
 import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 export const PAGES_MAX_FILE_BYTES = 25 * 1024 * 1024;
 
@@ -24,11 +24,11 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 }
 
 // Small fs helpers for tests (keeps node: imports out of the browser-typed test project).
-import { existsSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, truncateSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 export function makeTempFiles(files) {
   const d = mkdtempSync(join(tmpdir(), "sz-"));
-  for (const [name, size] of Object.entries(files)) { const p = join(d, name); writeFileSync(p, ""); truncateSync(p, size); }
+  for (const [name, size] of Object.entries(files)) { const p = join(d, name); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, ""); truncateSync(p, size); }
   return d;
 }
 export function readJsonIfExists(file) {

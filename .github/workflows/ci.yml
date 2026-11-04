@@ -20,3 +20,5 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+        env:
+          ALLOW_MISSING_DATA: "1"
