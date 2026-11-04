@@ -1,0 +1,7 @@
+/sw.js
+  Cache-Control: no-cache
+/data/*
+  Access-Control-Allow-Origin: *
+/data/basemap/*
+  Content-Type: application/vnd.mapbox-vector-tile
+  Cache-Control: public, max-age=86400
