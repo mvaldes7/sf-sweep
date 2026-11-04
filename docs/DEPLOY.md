@@ -45,8 +45,8 @@ Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
 
 ## Basemap (Protomaps, SF extract)
 
-`pnpm basemap` (needs the `pmtiles` CLI) writes `public/data/sf-basemap.pmtiles` (about 17.5 MB, z0-15,
-bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build. It ships with the Pages build at
-`/data/sf-basemap.pmtiles` (under the 25 MiB per-file limit, checked by `pnpm build`). Glyphs are self-hosted in
+`pnpm basemap` (needs the `pmtiles` CLI) extracts an SF PMTiles (about 17.5 MB, z0-15,
+bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build and unpacks it into static tiles at
+`/data/basemap/{z}/{x}/{y}.mvt` (1113 files, about 33 MB uncompressed). Pages does not answer range requests with 206 (tested 2026-11-04), so a single .pmtiles file does not work there. Glyphs are self-hosted in
 `public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable.
 R2 is not used (decision 2026-11-04): all static data, including the basemap, is served by Pages.

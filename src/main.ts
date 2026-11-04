@@ -52,7 +52,7 @@ function style(): StyleSpecification {
   const s: StyleSpecification = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": c.bg } }] };
   if (config.basemapPmtilesUrl) {
     s.glyphs = location.origin + GLYPHS_URL;
-    s.sources.base = basemapSource(config.basemapPmtilesUrl);
+    s.sources.base = basemapSource(config.basemapPmtilesUrl, location.origin);
     s.layers.push(...basemapLayers(scheme()));
   }
   s.sources.sides = config.pmtilesUrl

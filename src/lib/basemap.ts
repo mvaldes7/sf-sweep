@@ -23,9 +23,18 @@ export const BASEMAP_FONT = "Noto Sans Regular";
 export const BASEMAP_FONT_MEDIUM = "Noto Sans Medium";
 export const BASEMAP_ATTRIBUTION = '<a href="https://protomaps.com">Protomaps</a> &copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>';
 
-export function basemapSource(pmtilesUrl: string): SourceSpecification {
-  return { type: "vector", url: `pmtiles://${pmtilesUrl}`, attribution: BASEMAP_ATTRIBUTION };
+/**
+ * A ".pmtiles" URL is read with HTTP range requests (needs a host that answers 206, e.g. R2).
+ * Anything else is a {z}/{x}/{y} tile template; Cloudflare Pages serves the basemap this way because it does
+ * not answer range requests with 206. Relative templates are resolved against origin.
+ */
+export function basemapSource(url: string, origin = ""): SourceSpecification {
+  if (/\.pmtiles$/.test(url)) return { type: "vector", url: `pmtiles://${url}`, attribution: BASEMAP_ATTRIBUTION };
+  return { type: "vector", tiles: [url.startsWith("/") ? origin + url : url], minzoom: 0, maxzoom: BASEMAP_MAXZOOM,
+    bounds: BASEMAP_BOUNDS, attribution: BASEMAP_ATTRIBUTION };
 }
+export const BASEMAP_MAXZOOM = 15;
+export const BASEMAP_BOUNDS: [number, number, number, number] = [-122.65, 37.65, -122.3, 37.86];
 
 const PARK_KINDS = ["park", "garden", "golf_course", "nature_reserve", "playground", "recreation_ground", "cemetery", "grass", "forest", "wood"];
 

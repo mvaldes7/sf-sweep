@@ -17,6 +17,11 @@ describe("basemap style builder", () => {
     for (const v of Object.values(BASEMAP_COLORS.dark).filter((x) => x !== BASEMAP_COLORS.dark.label && x !== BASEMAP_COLORS.dark.place)) expect(lum(v)).toBeLessThan(0.15);
     expect(lum(BASEMAP_COLORS.light.bg)).toBeGreaterThan(0.85);
   });
+  it("defaults to static z/x/y tiles resolved against the origin (Pages has no 206 range support)", () => {
+    const s = basemapSource("/data/basemap/{z}/{x}/{y}.mvt", "https://sf-sweep.pages.dev") as { tiles: string[]; maxzoom: number };
+    expect(s.tiles).toEqual(["https://sf-sweep.pages.dev/data/basemap/{z}/{x}/{y}.mvt"]);
+    expect(s.maxzoom).toBe(15);
+  });
   it("source uses the pmtiles protocol with attribution", () => {
     const s = basemapSource("/data/sf-basemap.pmtiles") as { url: string; attribution: string };
     expect(s.url).toBe("pmtiles:///data/sf-basemap.pmtiles");
