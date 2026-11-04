@@ -14,6 +14,7 @@ import {
 import { buildIcs } from "./lib/ics";
 import { drawStatusIcons } from "./icons";
 import { loadCar, saveCar, clearCar, type Car } from "./lib/car";
+import { legendItems, sideLabel } from "./lib/labels";
 import { enablePush, disablePush, pushSupported } from "./push";
 
 const hol = new HolidayTable(holidaysJson.holidays as Holiday[]);
@@ -205,6 +206,20 @@ $("scrub").addEventListener("input", (e) => {
 // keep "now" fresh when paused at tick 0
 window.setInterval(() => { if (!playing && mode === "live") render(); renderCar(); }, 60000);
 
+// ---------- legend + toast ----------
+function renderLegend() {
+  $("legend").innerHTML = legendItems(mode).map((i) => `<span class="lg ${i.cls}"><i class="sw"></i>${i.text}</span>`).join("");
+  $("legend").setAttribute("aria-label", mode === "plan" ? "Legend: plan by day" : "Legend: live status");
+}
+let toastTimer = 0;
+function showToast(msg: string, ms = 5000) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.hidden = false;
+  window.clearTimeout(toastTimer);
+  toastTimer = window.setTimeout(() => { t.hidden = true; t.textContent = ""; }, ms);
+}
+
 // ---------- modes ----------
 function setMode(m: "live" | "plan") {
   mode = m;
@@ -212,6 +227,7 @@ function setMode(m: "live" | "plan") {
   $("mode-plan").setAttribute("aria-selected", String(m === "plan"));
   $("chips").hidden = m !== "plan";
   $("plan").hidden = m !== "plan";
+  renderLegend();
   $("timelapse").hidden = m !== "live";
   lastState.clear();
   schedulePlay(); render();
@@ -259,7 +275,7 @@ function showDetail(id: number) {
   el.innerHTML = `<button class="close" aria-label="Close">Close</button>
     <h2>${esc(s.street)}</h2><div class="muted">${esc(s.limits)} - CNN ${esc(s.cnn)}</div>
     <div class="signs">${pair.map((p) => `<div class="side${p.id === id ? " picked" : ""}" data-id="${p.id}">
-      <div class="side-h">${esc((p.blockside || "").toUpperCase())} SIDE (${p.side})</div>
+      <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
       ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}</div>`).join("")}</div>
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
     <button class="primary" id="park">Park here and alert me</button>`;
@@ -302,6 +318,7 @@ async function armAlert(car: Car) {
   renderCar();
 }
 
+let carExpanded = false;
 function renderCar() {
   const car = loadCar();
   const el = $("car");
@@ -321,13 +338,18 @@ function renderCar() {
     : !pushSupported() ? "Push needs Home Screen install on iPhone - use the .ics reminder"
     : !config.apiBase ? "Push server not configured - use the .ics reminder"
     : car.alertError ? `Push failed: ${esc(car.alertError)}` : "Push alert off";
-  el.innerHTML = `<div class="car-h"><b>My car</b><span class="muted">saved on this device - no account</span></div>
-    ${head}
+  const short = n ? `Move by ${fullFmt.format(n.start)}` : "No sweeping in the next 10 weeks";
+  el.innerHTML = `<div class="car-bar">
+      <div class="car-bar-main"><b>My car</b> ${head}<div class="muted car-bar-sub">${esc(short)} - ${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))}</div></div>
+      <button class="pill car-toggle" id="car-toggle" aria-expanded="${carExpanded}" aria-controls="car-more">${carExpanded ? "Less" : "More"}</button>
+    </div>
+    <div id="car-more" class="car-more">
+    <div class="car-h"><span class="muted">saved on this device - no account</span></div>
     <div class="car-grid"><div>
       <div class="eyebrow">NEXT SWEEP ON YOUR SIDE IN</div>
       ${n ? `<div class="count"><span>${d}<small>day</small></span><span>${h}<small>hrs</small></span><span>${m}<small>min</small></span></div>
       <div class="moveby"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
-      <div class="muted">${esc(s.street)}, ${esc(s.blockside)} side - ${esc(s.limits)}</div>
+      <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
     </div><div class="car-sign">${signHtml(n ? rules.filter((r) => ruleActiveAt(r, n.start, hol)).slice(0, 1) : rules.slice(0, 1))}</div></div>
     <div class="muted">${alertLine}</div>
     <div class="row">
@@ -335,13 +357,15 @@ function renderCar() {
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
       <a class="pill" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat},${car.lng}" target="_blank" rel="noopener">Directions</a>
       <button class="pill" id="car-moved">I moved</button>
-    </div>`;
+    </div></div>`;
+  el.classList.toggle("expanded", carExpanded);
+  el.querySelector("#car-toggle")?.addEventListener("click", () => { carExpanded = !carExpanded; renderCar(); });
   el.hidden = false;
   carMarker = new maplibregl.Marker({ color: "#ffffff" }).setLngLat([car.lng, car.lat]).addTo(map);
   el.querySelector("#car-alert")?.addEventListener("click", () => { void armAlert(car); });
   el.querySelector("#car-ics")?.addEventListener("click", () => {
     if (!n) return;
-    const blob = new Blob([buildIcs({ start: n.start, end: n.end, title: `Move car: street cleaning on ${s.street}`, location: `${s.street} (${s.limits}), ${s.blockside} side, San Francisco`, alarmMin: config.alertLeadMin })], { type: "text/calendar" });
+    const blob = new Blob([buildIcs({ start: n.start, end: n.end, title: `Move car: street cleaning on ${s.street}`, location: `${s.street} (${s.limits}), ${sideLabel(s.blockside, s.side)}, San Francisco`, alarmMin: config.alertLeadMin })], { type: "text/calendar" });
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "street-cleaning.ics"; a.click();
   });
   el.querySelector("#car-moved")?.addEventListener("click", () => { void disablePush().finally(() => { clearCar(); renderCar(); }); });
@@ -367,7 +391,7 @@ function locate(silent = false) {
   if (!("geolocation" in navigator)) return;
   navigator.geolocation.getCurrentPosition(
     (p) => map.flyTo({ center: [p.coords.longitude, p.coords.latitude], zoom: 16.5 }),
-    () => { if (!silent) alert("Location unavailable. Showing the city view."); },
+    () => { if (!silent) showToast("Location unavailable. Showing the city view."); },
     { enableHighAccuracy: true, timeout: 10000 },
   );
 }

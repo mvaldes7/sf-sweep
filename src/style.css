@@ -58,7 +58,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sign-b { padding: 6px 4px 8px; display: grid; gap: 2px; }
 .sign-sub { font-size: 11px; } .sign-time { font-size: 17px; } .sign-day { font-size: 15px; } .sign-weeks { font-size: 11px; } .sign-ex { font-size: 10px; margin-top: 4px; }
 .fine { font-size: 12px; color: var(--muted); }
-.car { top: auto; z-index: 4; bottom: auto; top: calc(env(safe-area-inset-top) + 8px); }
+/* My car: compact bar at the bottom (never covers search, mode tabs or legend); "More" expands details. */
+.car { z-index: 4; padding: 8px 10px; }
+.car-bar { display: flex; gap: 8px; align-items: center; }
+.car-bar-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.car-bar-main .st { font-size: 13px; }
+.car-bar-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
+.car-toggle { flex: none; }
+.car .car-more { display: none; }
+.car.expanded .car-more { display: block; max-height: 45vh; overflow: auto; margin-top: 6px; }
+body:has(.car:not([hidden])) .timelapse { bottom: calc(8px + env(safe-area-inset-bottom) + var(--car-h, 88px)); }
+@media (min-width: 900px) { .car { left: auto; right: 8px; width: 400px; } body:has(.car:not([hidden])) .timelapse { bottom: calc(8px + env(safe-area-inset-bottom)); } }
+.toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 160px); z-index: 10; background: var(--chip-on); color: var(--chip-on-fg);
+  border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 600; max-width: min(92vw, 420px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
 .car:not([hidden]) ~ .sheet { z-index: 6; }
 .car-h { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px; }
 .car-grid { display: grid; grid-template-columns: 1fr 140px; gap: 12px; margin: 8px 0; }
@@ -67,4 +79,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .moveby { border: 2px solid var(--soon); color: var(--soon); border-radius: 12px; padding: 8px 10px; margin: 8px 0; font-weight: 800; font-size: 17px; }
 .attrib { position: fixed; right: 4px; bottom: 0; font-size: 9px; color: var(--muted); z-index: 1; padding: 2px 4px; }
 .attrib a { color: inherit; }
-body:has(.car:not([hidden])) .top { display: none; }
+

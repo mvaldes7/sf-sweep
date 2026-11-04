@@ -11,7 +11,7 @@ export interface BasemapColors {
 }
 export const BASEMAP_COLORS: Record<Scheme, BasemapColors> = {
   dark: {
-    bg: "#0b0b0d", earth: "#111114", park: "#0f1a13", water: "#0c1620", building: "#16161b", buildingLine: "#1f1f26",
+    bg: "#0b0b0d", earth: "#111114", park: "#14281b", water: "#10233a", building: "#16161b", buildingLine: "#1f1f26",
     road: "#1a1a20", roadMajor: "#22222a", label: "#7d7f88", labelHalo: "#0b0b0d", place: "#9a9ca6",
   },
   light: {
