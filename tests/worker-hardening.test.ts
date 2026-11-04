@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import worker, {
-  MAX_ROWS, SEND_BATCH, type Env, isAllowedPushEndpoint, originAllowed, pushOutcome, readJsonCapped, sendDue, validate,
+  MAX_ROWS, SEND_BATCH, rateKey, type Env, isAllowedPushEndpoint, originAllowed, pushOutcome, readJsonCapped, sendDue, validate,
 } from "../worker/src/index";
 
 const P256 = "B" + "A".repeat(86);
@@ -168,5 +168,15 @@ describe("sendDue", () => {
     expect(new Set(seen).size).toBe(seen.length);
     expect(peak).toBeGreaterThan(1);
     expect(peak).toBeLessThanOrEqual(5);
+  });
+});
+
+describe("rate limit key", () => {
+  it("groups IPv6 by /64 and leaves IPv4 alone", () => {
+    expect(rateKey("203.0.113.9")).toBe("203.0.113.9");
+    expect(rateKey("2a09:bac1:7680:838::162:26c")).toBe(rateKey("2a09:bac1:7680:838::400:1f"));
+    expect(rateKey("2a09:bac1:7680:838::1")).toBe("2a09:bac1:7680:838::/64");
+    expect(rateKey("2001:db8::1")).toBe("2001:db8:0:0::/64");
+    expect(rateKey("2001:db8:0:1::1")).not.toBe(rateKey("2001:db8:0:2::1"));
   });
 });

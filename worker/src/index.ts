@@ -78,11 +78,21 @@ export async function readJsonCapped(req: Request, max = MAX_BODY_BYTES): Promis
   try { return JSON.parse(new TextDecoder().decode(buf)); } catch { throw new HttpError(400, "bad json"); }
 }
 
+/** Rate-limit key: IPv4 as is, IPv6 by /64 prefix (one end user usually owns a whole /64). */
+export function rateKey(ip: string): string {
+  if (!ip.includes(":")) return ip;
+  const [head, tail = ""] = ip.toLowerCase().split("::");
+  const h = head ? head.split(":") : [];
+  const t = tail ? tail.split(":") : [];
+  const full = ip.includes("::") ? [...h, ...Array(Math.max(0, 8 - h.length - t.length)).fill("0"), ...t] : h;
+  return full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, "")).join(":") + "::/64";
+}
+
 const memHits = new Map<string, { t: number; n: number }>();
 export async function rateLimited(req: Request, env: Env, now = Date.now()): Promise<boolean> {
-  const ip = req.headers.get("cf-connecting-ip") || "unknown";
+  const ip = rateKey(req.headers.get("cf-connecting-ip") || "unknown");
   if (env.API_LIMITER) {
-    try { return !(await env.API_LIMITER.limit({ key: ip })).success; } catch { /* fall through */ }
+    try { return !(await env.API_LIMITER.limit({ key: ip })).success; } catch (e) { console.warn("rate limiter binding failed", String(e)); }
   }
   const minute = Math.floor(now / 60000);
   const e = memHits.get(ip);
