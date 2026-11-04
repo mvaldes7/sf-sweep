@@ -115,6 +115,12 @@ describe("request limits", () => {
     const full = fakeDb({ count: MAX_ROWS });
     expect((await worker.fetch(put(JSON.stringify(good())), envWith(full.db))).status).toBe(503);
   });
+  it("OPTIONS preflight: 204 for allowed origin, 403 otherwise", async () => {
+    const env = envWith(fakeDb().db);
+    const pre = (o: string) => new Request("https://w.dev/api/spot", { method: "OPTIONS", headers: { origin: o } });
+    expect((await worker.fetch(pre("https://sf-sweep.pages.dev"), env)).status).toBe(204);
+    expect((await worker.fetch(pre("https://evil.example"), env)).status).toBe(403);
+  });
   it("rate limits /api/* via the binding when present", async () => {
     const { db } = fakeDb();
     const env = { ...envWith(db), API_LIMITER: { limit: async () => ({ success: false }) } };

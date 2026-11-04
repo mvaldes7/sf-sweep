@@ -109,7 +109,7 @@ export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     const cors = corsHeaders(req, env);
-    if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: cors });
+    if (req.method === "OPTIONS") return new Response(null, { status: originAllowed(req.headers.get("origin"), env.ALLOWED_ORIGIN) ? 204 : 403, headers: cors });
     try {
       if (url.pathname === "/api/health") return json({ ok: true }, 200, cors);
       if (url.pathname.startsWith("/api/") && (await rateLimited(req, env))) return json({ error: "rate limited" }, 429, { ...cors, "Retry-After": "60" });
