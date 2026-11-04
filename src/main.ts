@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import type { Feature } from "geojson";
 import "./style.css";
+import { GLYPHS_URL, type Scheme, basemapLabelLayers, basemapLayers, basemapSource } from "./lib/basemap";
 import { config } from "./config";
 import holidaysJson from "./data/holidays.json";
 import { decodeRule, searchStreets, type SideRecord, type SweepIndex } from "./lib/data";
@@ -38,6 +39,8 @@ const palette = () => darkQuery.matches
   ? { bg: "#0b0b0d", water: "#0f1a24", road: "#1c1c22", clear: "#2bd96b", soon: "#ffc83d", now: "#ff4d5e", casing: "#000000" }
   : { bg: "#eef0f3", water: "#cfe0ee", road: "#ffffff", clear: "#0f9d47", soon: "#c98a00", now: "#d7263d", casing: "#ffffff" };
 
+const scheme = (): Scheme => (darkQuery.matches ? "dark" : "light");
+
 // ---------- map ----------
 const protocol = new Protocol();
 maplibregl.addProtocol("pmtiles", protocol.tile);
@@ -46,11 +49,9 @@ function style(): StyleSpecification {
   const c = palette();
   const s: StyleSpecification = { version: 8, sources: {}, layers: [{ id: "bg", type: "background", paint: { "background-color": c.bg } }] };
   if (config.basemapPmtilesUrl) {
-    s.sources.base = { type: "vector", url: `pmtiles://${config.basemapPmtilesUrl}`, attribution: "Protomaps, OpenStreetMap contributors" };
-    s.layers.push(
-      { id: "water", type: "fill", source: "base", "source-layer": "water", paint: { "fill-color": c.water } },
-      { id: "roads", type: "line", source: "base", "source-layer": "roads", paint: { "line-color": c.road, "line-width": ["interpolate", ["linear"], ["zoom"], 12, 0.5, 17, 8] } },
-    );
+    s.glyphs = location.origin + GLYPHS_URL;
+    s.sources.base = basemapSource(config.basemapPmtilesUrl);
+    s.layers.push(...basemapLayers(scheme()));
   }
   s.sources.sides = config.pmtilesUrl
     ? { type: "vector", url: `pmtiles://${config.pmtilesUrl}`, promoteId: "fid" }
@@ -73,6 +74,7 @@ function style(): StyleSpecification {
     { id: "sides-dash", type: "line", source: "sides", ...sl, layout: { "line-cap": "butt" },
       paint: { "line-color": c.soon, "line-width": width, "line-dasharray": [1.4, 1], "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "s"], 0], 1], 1, 0] } } as LayerSpecification,
   );
+  if (config.basemapPmtilesUrl) s.layers.push(...basemapLabelLayers(scheme()));
   s.sources.marks = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
   s.layers.push({ id: "marks", type: "symbol", source: "marks", minzoom: 15,
     layout: { "icon-image": ["concat", "st-", ["get", "st"]], "icon-size": ["interpolate", ["linear"], ["zoom"], 15, 0.5, 18, 0.9], "icon-allow-overlap": false, "icon-padding": 2, "symbol-sort-key": ["-", 0, ["get", "rank"]] } });

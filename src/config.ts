@@ -5,8 +5,8 @@ export const config = {
   /** URL of sweep.pmtiles; when empty the GeoJSON fallback is used */
   pmtilesUrl: import.meta.env.VITE_SWEEP_PMTILES_URL || "",
   geojsonUrl: import.meta.env.VITE_SWEEP_GEOJSON_URL || "/data/sweep-sides.geojson",
-  /** Optional self-hosted Protomaps basemap (pmtiles). Empty = plain background with street lines only. */
-  basemapPmtilesUrl: import.meta.env.VITE_BASEMAP_PMTILES_URL || "",
+  /** Protomaps basemap (pmtiles, SF extract). Built by `pnpm basemap` into public/data. Set "off" to disable. */
+  basemapPmtilesUrl: import.meta.env.VITE_BASEMAP_PMTILES_URL === "off" ? "" : (import.meta.env.VITE_BASEMAP_PMTILES_URL || "/data/sf-basemap.pmtiles"),
   /** Alerts Worker base URL, e.g. https://sf-sweep-alerts.<account>.workers.dev */
   apiBase: import.meta.env.VITE_API_BASE || "",
   vapidPublicKey: import.meta.env.VITE_VAPID_PUBLIC_KEY || "",

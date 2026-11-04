@@ -53,3 +53,11 @@ Not created yet (blocked, needs Mike in the dashboard):
 
 DataSF updates the schedule "as needed". Re-run `pnpm data` and redeploy (or re-upload to R2) when it changes.
 Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
+
+## Basemap (Protomaps, SF extract)
+
+`pnpm basemap` (needs the `pmtiles` CLI) writes `public/data/sf-basemap.pmtiles` (about 17.5 MB, z0-15,
+bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build. It ships with the Pages build at
+`/data/sf-basemap.pmtiles` (under the 25 MiB per-file limit, checked by `pnpm build`). Glyphs are self-hosted in
+`public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable, or to an R2 URL once R2 is enabled.
+R2 bucket `sf-sweep-tiles` was NOT created: R2 is not enabled on the account (API code 10042).
