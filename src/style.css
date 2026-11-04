@@ -1,13 +1,13 @@
 [hidden] { display: none !important; }
 :root {
   --bg: #0b0b0d; --panel: rgba(20, 20, 24, 0.92); --line: rgba(255, 255, 255, 0.1); --fg: #f2f2f4; --muted: #9a9aa3;
-  --clear: #2bd96b; --soon: #ffc83d; --now: #ff4d5e; --chip: #1d1d22; --chip-on: #f2f2f4; --chip-on-fg: #0b0b0d;
+  --clear: #2a9d5c; --soon: #ffc83d; --now: #ff4d5e; --chip: #1d1d22; --chip-on: #f2f2f4; --chip-on-fg: #0b0b0d;
   color-scheme: dark light;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: light) {
   :root { --bg: #eef0f3; --panel: rgba(255, 255, 255, 0.95); --line: rgba(0, 0, 0, 0.1); --fg: #111114; --muted: #5d5d66;
-    --clear: #0f9d47; --soon: #a87400; --now: #d7263d; --chip: #e4e5ea; --chip-on: #111114; --chip-on-fg: #fff; }
+    --clear: #3f9d68; --soon: #a87400; --now: #d7263d; --chip: #e4e5ea; --chip-on: #111114; --chip-on-fg: #fff; }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }

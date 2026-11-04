@@ -1,6 +1,6 @@
 /** Build-time configuration (Vite env). No secrets live here: VAPID public key is public by design. */
 export const config = {
-  /** URL of sweep-index.json (R2 public URL or same-origin /data) */
+  /** URL of sweep-index.json (same-origin /data on Pages) */
   indexUrl: import.meta.env.VITE_SWEEP_INDEX_URL || "/data/sweep-index.json",
   /** URL of sweep.pmtiles; when empty the GeoJSON fallback is used */
   pmtilesUrl: import.meta.env.VITE_SWEEP_PMTILES_URL || "",

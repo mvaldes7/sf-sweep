@@ -10,9 +10,6 @@ Everything here fits the Cloudflare free plan. Do not enable Workers Paid, custo
 | `sf-sweep` | Pages project | https://sf-sweep.pages.dev (preview: https://feat-v1.sf-sweep.pages.dev) | created 2026-11-02, production branch main; only a feat-v1 preview deployed |
 | `sf-sweep-alerts` | Worker | https://sf-sweep-alerts.miggyman7.workers.dev | uploaded with D1 binding, vars and the `VAPID_PRIVATE_KEY` secret; cron `* * * * *` set; `/api/health` ok |
 
-Not created yet (blocked, needs Mike in the dashboard):
-
-- **R2 bucket** `sf-sweep-data`: R2 is not enabled on the account ("Please enable R2 through the Cloudflare Dashboard").
 
 ## Steps for Mike
 
@@ -36,22 +33,14 @@ Not created yet (blocked, needs Mike in the dashboard):
    npx wrangler pages project create sf-sweep --production-branch main
    npx wrangler pages deploy dist --project-name sf-sweep --branch feat-v1   # preview
    ```
-   `dist/data/` carries the GeoJSON fallback, so R2 is optional for v1.
-6. R2 (optional, only if it does not ask for a paid plan): enable R2 in the dashboard (free tier: 10 GB-month storage),
-   create bucket `sf-sweep-data`, enable its public r2.dev URL, then upload:
-   ```
-   npx wrangler r2 object put sf-sweep-data/sweep.pmtiles --file public/data/sweep.pmtiles --remote
-   npx wrangler r2 object put sf-sweep-data/sweep-index.json --file public/data/sweep-index.json --remote
-   ```
-   Add a CORS rule on the bucket allowing GET and the `Range` header from `https://sf-sweep.pages.dev`, then set
-   `VITE_SWEEP_PMTILES_URL` / `VITE_SWEEP_INDEX_URL` to the r2.dev URLs and rebuild.
+   `dist/data/` carries the sweep data and basemap.
 7. If the Pages URL differs from `sf-sweep.pages.dev`, update `ALLOWED_ORIGIN` in `worker/wrangler.toml` and redeploy.
 8. On iPhone (iOS 16.4+): open the Pages URL in Safari, Share > Add to Home Screen, open from the Home Screen,
    save a spot and tap "Turn on alert". Push does not work in a normal Safari tab; use the .ics reminder there.
 
 ## Data refresh
 
-DataSF updates the schedule "as needed". Re-run `pnpm data` and redeploy (or re-upload to R2) when it changes.
+DataSF updates the schedule "as needed". Re-run `pnpm data` and redeploy when it changes.
 Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
 
 ## Basemap (Protomaps, SF extract)
@@ -59,5 +48,5 @@ Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
 `pnpm basemap` (needs the `pmtiles` CLI) writes `public/data/sf-basemap.pmtiles` (about 17.5 MB, z0-15,
 bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build. It ships with the Pages build at
 `/data/sf-basemap.pmtiles` (under the 25 MiB per-file limit, checked by `pnpm build`). Glyphs are self-hosted in
-`public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable, or to an R2 URL once R2 is enabled.
-R2 bucket `sf-sweep-tiles` was NOT created: R2 is not enabled on the account (API code 10042).
+`public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable.
+R2 is not used (decision 2026-11-04): all static data, including the basemap, is served by Pages.

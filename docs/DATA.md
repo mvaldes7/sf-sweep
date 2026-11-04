@@ -29,11 +29,11 @@ brew install tippecanoe          # macOS; on Linux build from https://github.com
 pnpm data                        # now also writes public/data/sweep.pmtiles
 ```
 
-Then upload to R2 and set `VITE_SWEEP_PMTILES_URL` (see DEPLOY.md). The app automatically uses PMTiles when that
+Then host it (Pages /data) and set `VITE_SWEEP_PMTILES_URL` (see DEPLOY.md). The app automatically uses PMTiles when that
 variable is set and GeoJSON otherwise.
 
 Optional basemap: download a Protomaps extract for SF (`pmtiles extract https://build.protomaps.com/<date>.pmtiles sf.pmtiles --bbox=-122.52,37.70,-122.35,37.84`),
-upload to R2 and set `VITE_BASEMAP_PMTILES_URL`. Without it the map shows the street lines on a plain background.
+or run `pnpm basemap`; it is served from Pages at /data/sf-basemap.pmtiles (`VITE_BASEMAP_PMTILES_URL=off` disables it).
 
 ## Assumptions and gaps
 

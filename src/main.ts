@@ -36,9 +36,11 @@ let styleReady = false;
 
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const palette = () => darkQuery.matches
-  ? { bg: "#0b0b0d", water: "#0f1a24", road: "#1c1c22", clear: "#2bd96b", soon: "#ffc83d", now: "#ff4d5e", casing: "#000000" }
-  : { bg: "#eef0f3", water: "#cfe0ee", road: "#ffffff", clear: "#0f9d47", soon: "#c98a00", now: "#d7263d", casing: "#ffffff" };
+  ? { bg: "#0b0b0d", water: "#0f1a24", road: "#1c1c22", clear: "#2a9d5c", soon: "#ffc83d", now: "#ff4d5e", casing: "#000000" }
+  : { bg: "#eef0f3", water: "#cfe0ee", road: "#ffffff", clear: "#3f9d68", soon: "#c98a00", now: "#d7263d", casing: "#ffffff" };
 
+/** Clear streets stay visible but recede so labels and amber/red read first. */
+const CLEAR_OPACITY = 0.7;
 const scheme = (): Scheme => (darkQuery.matches ? "dark" : "light");
 
 // ---------- map ----------
@@ -64,12 +66,12 @@ function style(): StyleSpecification {
   const color: maplibregl.ExpressionSpecification = ["match", ["coalesce", ["feature-state", "s"], 0], 2, c.now, 1, c.soon, c.clear];
   s.layers.push(
     { id: "sides-glow", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
-      paint: { "line-color": color, "line-width": wz(2.2), "line-blur": wz(1.2), "line-opacity": darkQuery.matches ? 0.35 : 0.15 } } as LayerSpecification,
+      paint: { "line-color": color, "line-width": wz(2.2), "line-blur": wz(1.2), "line-opacity": ["match", ["coalesce", ["feature-state", "s"], 0], 0, 0, darkQuery.matches ? 0.35 : 0.15] } } as LayerSpecification,
     { id: "sides-casing", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
-      paint: { "line-color": c.casing, "line-width": wz(1, 2), "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "s"], 0], 1], 0, 0.6] } } as LayerSpecification,
+      paint: { "line-color": c.casing, "line-width": wz(1, 2), "line-opacity": ["match", ["coalesce", ["feature-state", "s"], 0], 1, 0, 2, 0.6, 0.3] } } as LayerSpecification,
     // solid for clear (green) and sweeping now (red); hidden when amber
     { id: "sides-solid", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
-      paint: { "line-color": color, "line-width": width, "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "s"], 0], 1], 0, 1] } } as LayerSpecification,
+      paint: { "line-color": color, "line-width": width, "line-opacity": ["match", ["coalesce", ["feature-state", "s"], 0], 1, 0, 2, 1, CLEAR_OPACITY] } } as LayerSpecification,
     // dashed amber for within 1 hour
     { id: "sides-dash", type: "line", source: "sides", ...sl, layout: { "line-cap": "butt" },
       paint: { "line-color": c.soon, "line-width": width, "line-dasharray": [1.4, 1], "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "s"], 0], 1], 1, 0] } } as LayerSpecification,
