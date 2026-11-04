@@ -1,7 +1,8 @@
 import maplibregl, { type GeoJSONSource, type StyleSpecification, type LayerSpecification } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
-import type { Feature } from "geojson";
+import { buildMarks } from "./lib/marks";
+import { trackHeight } from "./lib/layout";
 import "./style.css";
 import { GLYPHS_URL, type Scheme, basemapLabelLayers, basemapLayers, basemapSource } from "./lib/basemap";
 import { config } from "./config";
@@ -42,6 +43,7 @@ const palette = () => darkQuery.matches
 
 /** Clear streets stay visible but recede so labels and amber/red read first. */
 const CLEAR_OPACITY = 0.7;
+const GLOW_MINZOOM = 14;
 const scheme = (): Scheme => (darkQuery.matches ? "dark" : "light");
 
 // ---------- map ----------
@@ -66,7 +68,8 @@ function style(): StyleSpecification {
   const width = wz(1);
   const color: maplibregl.ExpressionSpecification = ["match", ["coalesce", ["feature-state", "s"], 0], 2, c.now, 1, c.soon, c.clear];
   s.layers.push(
-    { id: "sides-glow", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
+    // glow is a blurred wide line (expensive fill-rate); only worth it when zoomed in
+    { id: "sides-glow", type: "line", source: "sides", ...sl, minzoom: GLOW_MINZOOM, layout: { "line-cap": "round" },
       paint: { "line-color": color, "line-width": wz(2.2), "line-blur": wz(1.2), "line-opacity": ["match", ["coalesce", ["feature-state", "s"], 0], 0, 0, darkQuery.matches ? 0.35 : 0.15] } } as LayerSpecification,
     { id: "sides-casing", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
       paint: { "line-color": c.casing, "line-width": wz(1, 2), "line-opacity": ["match", ["coalesce", ["feature-state", "s"], 0], 1, 0, 2, 0.6, 0.3] } } as LayerSpecification,
@@ -86,7 +89,7 @@ function style(): StyleSpecification {
 
 const map = new maplibregl.Map({
   container: "map", style: style(), center: config.cityCenter, zoom: config.cityZoom,
-  attributionControl: { compact: true }, maxBounds: [[-122.65, 37.65], [-122.3, 37.86]],
+  attributionControl: false, // credits live in the always-visible footer (#attrib) maxBounds: [[-122.65, 37.65], [-122.3, 37.86]],
 });
 
 function addIcons() {
@@ -97,7 +100,14 @@ function addIcons() {
 }
 map.on("style.load", () => { styleReady = true; addIcons(); lastState.clear(); render(); });
 darkQuery.addEventListener("change", () => { styleReady = false; map.setStyle(style()); });
-map.on("sourcedata", (e) => { if (e.sourceId === "sides" && e.isSourceLoaded) { lastState.clear(); render(); } });
+// Feature state survives tile reloads, so only re-apply once per style load (not on every
+// sourcedata event, which fires for each tile while panning and used to redo 22k updates).
+let sidesApplied = false;
+map.on("style.load", () => { sidesApplied = false; });
+map.on("sourcedata", (e) => {
+  if (sidesApplied || e.sourceId !== "sides" || !e.isSourceLoaded) return;
+  sidesApplied = true; lastState.clear(); render();
+});
 
 // ---------- data ----------
 async function loadIndex() {
@@ -123,18 +133,18 @@ function planDate(): number | null {
   return now + delta * 86400000;
 }
 
+let marksDirty = true;
 function render() {
   if (!sides.length || !styleReady) return;
   const sl = config.pmtilesUrl ? "sides" : undefined;
-  const points: Feature[] = [];
   let swept = 0;
+  let changed = marksDirty;
   if (mode === "live") {
     const clock = clockAt(liveTime());
     for (const s of sides) {
       const st = statusFromClock(rulesById.get(s.id)!, clock, hol);
       const n = STATUS_NUM[st];
-      if (lastState.get(s.id) !== n) { map.setFeatureState({ source: "sides", sourceLayer: sl, id: s.id }, { s: n }); lastState.set(s.id, n); }
-      points.push({ type: "Feature", properties: { st, rank: n }, geometry: { type: "Point", coordinates: s.mid } });
+      if (lastState.get(s.id) !== n) { map.setFeatureState({ source: "sides", sourceLayer: sl, id: s.id }, { s: n }); lastState.set(s.id, n); changed = true; }
     }
   } else {
     const t = planDate();
@@ -144,11 +154,12 @@ function render() {
       const on = parts ? sweptOnDate(rules, parts, hol) : rules.length > 0;
       if (on) swept++;
       const n = on ? 2 : 0;
-      if (lastState.get(s.id) !== n) { map.setFeatureState({ source: "sides", sourceLayer: sl, id: s.id }, { s: n }); lastState.set(s.id, n); }
-      points.push({ type: "Feature", properties: { st: on ? "now" : "clear", rank: n }, geometry: { type: "Point", coordinates: s.mid } });
+      if (lastState.get(s.id) !== n) { map.setFeatureState({ source: "sides", sourceLayer: sl, id: s.id }, { s: n }); lastState.set(s.id, n); changed = true; }
     }
   }
-  (map.getSource("marks") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: points });
+  // Rebuilding the 22k-point marks source re-tiles it in the worker; only do it when a status changed.
+  const marks = map.getSource("marks") as GeoJSONSource | undefined;
+  if (changed && marks) { marks.setData(buildMarks(sides, lastState)); marksDirty = false; }
   renderTimeLabel();
   if (mode === "plan") renderPlan(swept);
 }
@@ -411,6 +422,8 @@ document.body.insertAdjacentHTML("afterbegin", `<svg width="0" height="0" style=
 // ---------- boot ----------
 renderChips();
 setMode("live");
+trackHeight($("car"), document.documentElement, "--car-h", window.ResizeObserver);
+trackHeight($("attrib"), document.documentElement, "--attrib-h", window.ResizeObserver);
 loadIndex().then(() => { render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
   .catch((e) => { $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
 if ("serviceWorker" in navigator && import.meta.env.PROD) void navigator.serviceWorker.register("/sw.js");
