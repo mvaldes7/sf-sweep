@@ -266,7 +266,7 @@ $("chips").addEventListener("click", (e) => {
 // ---------- signs ----------
 function signHtml(rules: Rule[]): string {
   if (!rules.length) return `<div class="sign"><div class="sign-h">NO SCHEDULE</div><div class="sign-sub">No sweeping data for this side</div></div>`;
-  return rules.map((r) => `<div class="sign" role="img" aria-label="No parking, street cleaning ${hourLabel(r.from)} to ${hourLabel(r.to)} ${dayLabel(r.day)}">
+  return sortByWeekday(rules, (r) => r).map((r) => `<div class="sign" role="img" aria-label="No parking, street cleaning ${hourLabel(r.from)} to ${hourLabel(r.to)} ${dayLabel(r.day)}">
     <div class="sign-h">NO PARKING</div>
     <div class="sign-b"><div class="sign-sub">STREET CLEANING</div>
     <div class="sign-time">${hourLabel(r.from)} TO ${hourLabel(r.to)}</div>
@@ -446,7 +446,7 @@ function renderCar() {
     <div class="car-grid"><div>
       <div class="eyebrow">NEXT SWEEP ON YOUR SIDE IN</div>
       ${n ? `<div class="count"><span>${d}<small>day</small></span><span>${h}<small>hrs</small></span><span>${m}<small>min</small></span></div>
-      <div class="moveby"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
+      <div class="moveby ${risk.level}"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
       <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
     </div><div class="car-sign">${signHtml(n ? rules.filter((r) => ruleActiveAt(r, n.start, hol)).slice(0, 1) : rules.slice(0, 1))}</div></div>
     <div class="row">
