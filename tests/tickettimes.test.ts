@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { HolidayTable, type Rule } from "../src/lib/schedule";
-import { LineIndex, clockFor, matchWindows, parseLocal, pointLineM, quantile, windowStat } from "../src/lib/tickettimes";
+import { LineIndex, clockFor, sortByWeekday, matchWindows, parseLocal, pointLineM, quantile, windowStat } from "../src/lib/tickettimes";
 
 const hol = new HolidayTable([{ date: "2026-11-26", name: "Thanksgiving Day", nightlyNotEnforced: true }]);
 const all = [true, true, true, true, true];
@@ -82,5 +82,12 @@ describe("snapping", () => {
     expect(ix.nearest([-122.4851, 37.78025])?.key).toBe("a");
     expect(ix.nearest([-122.4851, 37.7805])?.key).toBe("b");
     expect(ix.nearest([-122.4851, 37.7812])).toBeNull(); // > 40 m from both
+  });
+});
+
+describe("sortByWeekday", () => {
+  it("orders Mon -> Sun, holiday-only last, then by hour", () => {
+    const rs = [rule(0, 6, 8), rule(4, 6, 8), rule("H", 6, 8), rule(1, 9, 11), rule(1, 6, 8), rule(6, 6, 8)];
+    expect(sortByWeekday(rs, (r) => r).map((r) => `${r.day}@${r.from}`)).toEqual(["1@6", "1@9", "4@6", "6@6", "0@6", "H@6"]);
   });
 });

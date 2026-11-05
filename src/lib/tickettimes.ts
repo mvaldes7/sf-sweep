@@ -115,3 +115,9 @@ export class LineIndex {
     return best;
   }
 }
+
+/** Order items by their rule's weekday Mon -> Sun (holiday-only rules last), then by start hour. */
+export function sortByWeekday<T>(items: T[], ruleOf: (x: T) => Rule): T[] {
+  const key = (r: Rule) => (r.day === "H" ? 7 : (r.day + 6) % 7) * 100 + r.from;
+  return [...items].sort((a, b) => key(ruleOf(a)) - key(ruleOf(b)));
+}

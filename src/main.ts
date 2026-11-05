@@ -16,7 +16,7 @@ import { buildIcs } from "./lib/ics";
 import { drawStatusIcons } from "./icons";
 import { loadCar, saveCar, clearCar, type Car } from "./lib/car";
 import { alertStatus, legendItems, sideLabel } from "./lib/labels";
-import { clockFor } from "./lib/tickettimes";
+import { clockFor, sortByWeekday } from "./lib/tickettimes";
 import { enablePush, disablePush, pushSupported } from "./push";
 
 const hol = new HolidayTable(holidaysJson.holidays as Holiday[]);
@@ -294,9 +294,10 @@ function fillTimes(el: HTMLElement) {
     el.querySelectorAll<HTMLElement>("[data-tix]").forEach((d) => {
       const rules = rulesById.get(Number(d.dataset.tix))!;
       const rows = t.sides[d.dataset.tix!] ?? [];
-      d.innerHTML = rows.filter(([ri]) => rules[ri]).map(([ri, med, iqr, n]) => {
+      const side = esc(d.dataset.label ?? "");
+      d.innerHTML = sortByWeekday(rows.filter(([ri]) => rules[ri]), (x) => rules[x[0]]).map(([ri, med, iqr, n]) => {
         const r = rules[ri];
-        const pre = rules.length > 1 ? `${esc(dayLabel(r.day))} ${hourLabel(r.from)}: ` : "";
+        const pre = `${side}${rules.length > 1 ? ` - ${esc(dayLabel(r.day))} ${hourLabel(r.from)}` : ""}: `;
         return `<div class="tix-line" title="${n} citations, middle half within ${iqr} min">${pre}Tickets usually ~${clockFor(r.from, med)} (Pacific)</div>`;
       }).join("");
       any ||= rows.length > 0;
@@ -313,10 +314,10 @@ function showDetail(id: number) {
   const el = $("detail");
   el.innerHTML = `<button class="close" aria-label="Close">Close</button>
     <h2>${esc(s.street)}</h2><div class="muted">${esc(s.limits)} - CNN ${esc(s.cnn)}</div>
+    <div class="tix-top">${pair.map((p) => `<div class="tix" data-tix="${p.id}" data-label="${esc(sideLabel(p.blockside, p.side))}"></div>`).join("")}<p class="fine tix-note" hidden></p></div>
     <div class="signs">${pair.map((p) => `<div class="side${p.id === id ? " picked" : ""}" data-id="${p.id}">
       <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
-      ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}<div class="tix" data-tix="${p.id}"></div></div>`).join("")}</div>
-    <p class="fine tix-note" hidden></p>
+      ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}</div>`).join("")}</div>
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
     <button class="primary" id="park">Park here</button>`;
   el.hidden = false;
