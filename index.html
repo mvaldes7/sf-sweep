@@ -30,10 +30,13 @@
       <button id="mode-plan" role="tab" aria-selected="false">Plan by day</button>
     </div>
     <div id="chips" class="chips" hidden></div>
+    <div class="legend-row">
     <div id="legend" class="legend" aria-label="Legend: live status">
       <span class="lg clear"><i class="sw"></i>Clear</span>
       <span class="lg soon"><i class="sw"></i>Within 1 hr</span>
       <span class="lg now"><i class="sw"></i>Sweeping now</span>
+    </div>
+    <button id="safe-btn" class="pill safe-btn" aria-pressed="false">Safe spot nearby</button>
     </div>
   </header>
 
@@ -48,6 +51,7 @@
 
   <section id="plan" class="panel plan" hidden></section>
   <section id="car" class="panel car" hidden></section>
+  <section id="safe" class="panel safe-panel" aria-live="polite" hidden></section>
   <section id="detail" class="panel sheet" hidden></section>
   <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 

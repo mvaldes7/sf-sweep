@@ -2,13 +2,13 @@
 :root { --attrib-h: 18px; --car-h: 0px; }
 :root {
   --bg: #0b0b0d; --panel: rgba(20, 20, 24, 0.92); --line: rgba(255, 255, 255, 0.1); --fg: #f2f2f4; --muted: #9a9aa3;
-  --clear: #2a9d5c; --soon: #ffc83d; --now: #ff4d5e; --chip: #1d1d22; --chip-on: #f2f2f4; --chip-on-fg: #0b0b0d;
+  --clear: #2a9d5c; --safe: #5eead4; --soon: #ffc83d; --now: #ff4d5e; --chip: #1d1d22; --chip-on: #f2f2f4; --chip-on-fg: #0b0b0d;
   color-scheme: dark light;
   font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
 @media (prefers-color-scheme: light) {
   :root { --bg: #eef0f3; --panel: rgba(255, 255, 255, 0.95); --line: rgba(0, 0, 0, 0.1); --fg: #111114; --muted: #5d5d66;
-    --clear: #3f9d68; --soon: #a87400; --now: #d7263d; --chip: #e4e5ea; --chip-on: #111114; --chip-on-fg: #fff; }
+    --clear: #3f9d68; --safe: #0f766e; --soon: #a87400; --now: #d7263d; --chip: #e4e5ea; --chip-on: #111114; --chip-on-fg: #fff; }
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--fg); overflow: hidden; }
@@ -71,8 +71,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .car .car-more { display: none; }
 .car.expanded .car-more { display: block; max-height: 45vh; overflow: auto; margin-top: 6px; }
 /* --car-h is measured live (ResizeObserver) so wrapping or large text never overlaps the timelapse. */
-body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom) + var(--car-h) + 8px); }
-@media (min-width: 900px) { .car { left: auto; right: 8px; width: 400px; } body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom)); } }
+body:has(.car:not([hidden])) :is(.timelapse, .safe-panel) { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom) + var(--car-h) + 8px); }
+@media (min-width: 900px) { .car { left: auto; right: 8px; width: 400px; } body:has(.car:not([hidden])) :is(.timelapse, .safe-panel) { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom)); } }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 160px); z-index: 10; background: var(--chip-on); color: var(--chip-on-fg);
   border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 600; max-width: min(92vw, 420px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
 .car:not([hidden]) ~ .sheet { z-index: 6; }
@@ -91,3 +91,22 @@ body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + 6px + e
 .tix-top { margin: 8px 0 4px; }
 .tix-top:not(:has(.tix-line)) { display: none; }
 .tix-top .tix-note { margin: 4px 0 0; }
+
+/* ticket risk + safe spot */
+.car-bar-top { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.risk { font-weight: 700; font-size: 13px; }
+.risk.safe { color: var(--clear); } .risk.amber { color: var(--soon); } .risk.red { color: var(--now); } .risk.none { color: var(--muted); }
+.car-actions { display: flex; gap: 6px; margin-top: 4px; }
+.pill.sm { padding: 4px 10px; font-size: 12px; }
+.pill[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); }
+.legend-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.safe-btn { background: var(--panel); }
+body.safe-on .timelapse { display: none; }
+.safe-panel .safe-sum { font-size: 14px; margin: 4px 0; }
+.safe-n { color: var(--safe); font-size: 18px; }
+.seg-sm { display: inline-grid; grid-template-columns: 1fr 1fr; padding: 2px; }
+.seg-sm button { border: 0; background: transparent; border-radius: 999px; padding: 4px 12px; font-size: 13px; }
+.seg-sm button[aria-pressed="true"] { background: var(--chip-on); color: var(--chip-on-fg); font-weight: 600; }
+.side-next { font-size: 12px; font-weight: 600; text-align: center; }
+.side-safe { font-size: 12px; text-align: center; font-weight: 700; }
+.side-safe.yes { color: var(--safe); } .side-safe.no { color: var(--muted); }
