@@ -37,7 +37,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .lg.clear { color: var(--clear); } .lg.clear .sw { background: var(--clear); }
 .lg.soon { color: var(--soon); } .lg.soon .sw { background: repeating-linear-gradient(90deg, var(--soon) 0 6px, transparent 6px 10px); }
 .lg.now { color: var(--now); } .lg.now .sw { background: var(--now); }
-.panel { position: fixed; left: 8px; right: 8px; bottom: calc(var(--attrib-h) + env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; z-index: 3; max-width: 520px; backdrop-filter: blur(12px); }
+.panel { position: fixed; left: 8px; right: 8px; bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom)); background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 12px 14px; z-index: 3; max-width: 520px; backdrop-filter: blur(12px); }
 .timelapse .tl-row { display: flex; gap: 10px; align-items: center; }
 .timelapse input[type=range] { flex: 1; accent-color: var(--soon); }
 .tl-label { font-size: 12px; color: var(--muted); margin-top: 6px; }
@@ -60,17 +60,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sign-sub { font-size: 11px; } .sign-time { font-size: 17px; } .sign-day { font-size: 15px; } .sign-weeks { font-size: 11px; } .sign-ex { font-size: 10px; margin-top: 4px; }
 .fine { font-size: 12px; color: var(--muted); }
 /* My car: compact bar at the bottom (never covers search, mode tabs or legend); "More" expands details. */
-.car { z-index: 4; padding: 8px 10px; }
+.car { z-index: 4; padding: 8px 10px; max-height: calc(100vh - var(--attrib-h) - 16px - env(safe-area-inset-bottom)); overflow: auto; }
 .car-bar { display: flex; gap: 8px; align-items: center; }
 .car-bar-main { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .car-bar-main .st { font-size: 13px; }
 .car-bar-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; }
-.car-toggle { flex: none; }
+.car-toggle, #car-alert { flex: none; }
+.car-note { font-size: 12px; color: var(--muted); }
+.car-note.on { color: var(--clear); } .car-note.off { display: none; }
 .car .car-more { display: none; }
 .car.expanded .car-more { display: block; max-height: 45vh; overflow: auto; margin-top: 6px; }
 /* --car-h is measured live (ResizeObserver) so wrapping or large text never overlaps the timelapse. */
-body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + env(safe-area-inset-bottom) + var(--car-h) + 8px); }
-@media (min-width: 900px) { .car { left: auto; right: 8px; width: 400px; } body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + env(safe-area-inset-bottom)); } }
+body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom) + var(--car-h) + 8px); }
+@media (min-width: 900px) { .car { left: auto; right: 8px; width: 400px; } body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + 6px + env(safe-area-inset-bottom)); } }
 .toast { position: fixed; left: 50%; transform: translateX(-50%); top: calc(env(safe-area-inset-top) + 160px); z-index: 10; background: var(--chip-on); color: var(--chip-on-fg);
   border-radius: 12px; padding: 10px 14px; font-size: 14px; font-weight: 600; max-width: min(92vw, 420px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
 .car:not([hidden]) ~ .sheet { z-index: 6; }
@@ -80,6 +82,6 @@ body:has(.car:not([hidden])) .timelapse { bottom: calc(var(--attrib-h) + env(saf
 .count small { font-size: 11px; color: var(--muted); display: block; font-weight: 500; }
 .moveby { border: 2px solid var(--soon); color: var(--soon); border-radius: 12px; padding: 8px 10px; margin: 8px 0; font-weight: 800; font-size: 17px; }
 /* Attribution (OSM, Protomaps, DataSF) must always be visible: its own strip below every panel. */
-.attrib { position: fixed; left: 4px; right: 4px; bottom: env(safe-area-inset-bottom); font-size: 9px; line-height: 1.5; color: var(--muted); z-index: 7; padding: 1px 4px; text-align: right; }
+.attrib { position: fixed; left: 4px; right: 4px; bottom: env(safe-area-inset-bottom); font-size: 9px; line-height: 1.5; color: var(--muted); z-index: 7; padding: 1px 6px; text-align: right; background: var(--panel); border-radius: 6px; }
 .attrib a { color: inherit; }
 

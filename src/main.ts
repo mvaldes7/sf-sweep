@@ -15,7 +15,7 @@ import {
 import { buildIcs } from "./lib/ics";
 import { drawStatusIcons } from "./icons";
 import { loadCar, saveCar, clearCar, type Car } from "./lib/car";
-import { legendItems, sideLabel } from "./lib/labels";
+import { alertStatus, legendItems, sideLabel } from "./lib/labels";
 import { enablePush, disablePush, pushSupported } from "./push";
 
 const hol = new HolidayTable(holidaysJson.holidays as Holiday[]);
@@ -31,7 +31,7 @@ const lastState = new Map<number, number>();
 let mode: "live" | "plan" = "live";
 let planDay: "today" | "all" | number = "today";
 let tick = 0;
-let playing = true;
+let playing = false; // timelapse only plays when the user presses Play
 let speed = 1;
 let carMarker: maplibregl.Marker | null = null;
 let styleReady = false;
@@ -289,7 +289,7 @@ function showDetail(id: number) {
       <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
       ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}</div>`).join("")}</div>
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
-    <button class="primary" id="park">Park here and alert me</button>`;
+    <button class="primary" id="park">Park here</button>`;
   el.hidden = false;
   let chosen = id;
   el.querySelectorAll<HTMLElement>(".side").forEach((d) => d.addEventListener("click", () => {
@@ -313,18 +313,24 @@ async function park(id: number) {
   saveCar(car);
   $("detail").hidden = true;
   renderCar();
-  if (pushSupported() && config.apiBase && config.vapidPublicKey) await armAlert(car);
+  // Alerts are a separate opt-in ("Alert me" on the car card); saving never depends on push.
+}
+
+function notificationsBlocked(): boolean {
+  return typeof Notification !== "undefined" && Notification.permission === "denied";
 }
 
 async function armAlert(car: Car) {
   const n = nextSweep(rulesById.get(car.id) ?? [], Date.now(), hol);
   if (!n) return;
   const fireAt = n.start - config.alertLeadMin * 60000;
+  if (notificationsBlocked()) { saveCar({ ...car, alert: false, alertError: undefined, alertNote: "blocked" }); renderCar(); return; }
   try {
     await enablePush({ cnn: car.cnn, side: car.side, lat: car.lat, lng: car.lng }, Math.max(fireAt, Date.now() + 60000));
-    saveCar({ ...car, alert: true });
+    saveCar({ ...car, alert: true, alertError: undefined, alertNote: undefined });
   } catch (err) {
-    saveCar({ ...car, alert: false, alertError: String((err as Error).message || err) });
+    if (notificationsBlocked()) saveCar({ ...car, alert: false, alertError: undefined, alertNote: "blocked" });
+    else saveCar({ ...car, alert: false, alertError: String((err as Error).message || err) });
   }
   renderCar();
 }
@@ -345,13 +351,12 @@ function renderCar() {
   const head = st === "now" ? `<span class="st now"><svg class="ic"><use href="#i-x"/></svg>Sweeping now - move your car</span>`
     : st === "soon" ? `<span class="st soon"><svg class="ic"><use href="#i-clock"/></svg>Sweeping within 1 hr - move soon</span>`
     : `<span class="st clear"><svg class="ic"><use href="#i-check"/></svg>Clear now - safe to stay</span>`;
-  const alertLine = car.alert ? "Alert 1 hr before - push on"
-    : !pushSupported() ? "Push needs Home Screen install on iPhone - use the .ics reminder"
-    : !config.apiBase ? "Push server not configured - use the .ics reminder"
-    : car.alertError ? `Push failed: ${esc(car.alertError)}` : "Push alert off";
+  const al = alertStatus(car, { pushSupported: pushSupported(), apiConfigured: !!(config.apiBase && config.vapidPublicKey), blocked: notificationsBlocked() });
   const short = n ? `Move by ${fullFmt.format(n.start)}` : "No sweeping in the next 10 weeks";
   el.innerHTML = `<div class="car-bar">
-      <div class="car-bar-main"><b>My car</b> ${head}<div class="muted car-bar-sub">${esc(short)} - ${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))}</div></div>
+      <div class="car-bar-main"><b>My car</b> ${head}<div class="muted car-bar-sub">${esc(short)} - ${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))}</div>
+        <div class="car-note ${al.kind}" role="status" aria-live="polite">${esc(al.text)}</div></div>
+      ${al.canArm ? `<button class="pill" id="car-alert">Alert me</button>` : ""}
       <button class="pill car-toggle" id="car-toggle" aria-expanded="${carExpanded}" aria-controls="car-more">${carExpanded ? "Less" : "More"}</button>
     </div>
     <div id="car-more" class="car-more">
@@ -362,9 +367,7 @@ function renderCar() {
       <div class="moveby"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
       <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
     </div><div class="car-sign">${signHtml(n ? rules.filter((r) => ruleActiveAt(r, n.start, hol)).slice(0, 1) : rules.slice(0, 1))}</div></div>
-    <div class="muted">${alertLine}</div>
     <div class="row">
-      ${pushSupported() && config.apiBase && !car.alert ? `<button class="pill" id="car-alert">Turn on alert</button>` : ""}
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
       <a class="pill" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat},${car.lng}" target="_blank" rel="noopener">Directions</a>
       <button class="pill" id="car-moved">I moved</button>

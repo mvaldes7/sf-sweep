@@ -1,7 +1,7 @@
 /** Parked car, stored only on this device (localStorage). */
 export interface Car {
   id: number; cnn: string; side: "L" | "R"; lng: number; lat: number; savedAt: number;
-  alert?: boolean; alertError?: string;
+  alert?: boolean; alertError?: string; alertNote?: "blocked";
 }
 const KEY = "sfsweep.car.v1";
 export function loadCar(): Car | null {

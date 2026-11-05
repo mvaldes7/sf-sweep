@@ -32,3 +32,18 @@ describe("dark basemap contrast", () => {
     expect(lum(c.park)).toBeLessThan(0.15);
   });
 });
+
+import { alertStatus } from "../src/lib/labels";
+describe("alert status (saving never depends on push)", () => {
+  const env = { pushSupported: true, apiConfigured: true, blocked: false };
+  it("blocked notifications give a note, not an error, and no arm button", () => {
+    const a = alertStatus({}, { ...env, blocked: true });
+    expect(a.kind).toBe("note"); expect(a.canArm).toBe(false); expect(a.text).toMatch(/Car saved/);
+  });
+  it("offers opt-in when alerts are off", () => expect(alertStatus({}, env)).toMatchObject({ kind: "off", canArm: true }));
+  it("on when armed", () => expect(alertStatus({ alert: true }, env).kind).toBe("on"));
+  it("other failures keep the car saved and allow retry", () => {
+    const a = alertStatus({ alertError: "server 500" }, env);
+    expect(a).toMatchObject({ kind: "error", canArm: true }); expect(a.text).toMatch(/still saved/);
+  });
+});
