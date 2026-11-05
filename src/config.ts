@@ -5,6 +5,8 @@ export const config = {
   /** URL of sweep.pmtiles; when empty the GeoJSON fallback is used */
   pmtilesUrl: import.meta.env.VITE_SWEEP_PMTILES_URL || "",
   geojsonUrl: import.meta.env.VITE_SWEEP_GEOJSON_URL || "/data/sweep-sides.geojson",
+  /** Ticket-time line data (scripts/build-ticket-times.ts); optional, loaded on first block detail */
+  timesUrl: import.meta.env.VITE_SWEEP_TIMES_URL || "/data/sweep-times.json",
   /**
    * Protomaps basemap (SF extract), built by `pnpm basemap` into public/data/basemap as static z/x/y tiles.
    * A URL ending in .pmtiles uses range requests instead. Set "off" to disable.

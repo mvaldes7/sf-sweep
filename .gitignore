@@ -11,3 +11,4 @@ worker/.wrangler
 tmp
 .vapid-private.key
 !.env.example
+.cache

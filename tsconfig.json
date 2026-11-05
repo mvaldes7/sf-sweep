@@ -10,6 +10,7 @@
       "WebWorker"
     ],
     "strict": true,
+    "allowImportingTsExtensions": true,
     "noEmit": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,

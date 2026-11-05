@@ -18,6 +18,7 @@ import { buildIcs } from "./lib/ics";
 import { drawStatusIcons } from "./icons";
 import { loadCar, saveCar, clearCar, type Car } from "./lib/car";
 import { alertStatus, legendItems, sideLabel } from "./lib/labels";
+import { clockFor, sortByWeekday } from "./lib/tickettimes";
 import { enablePush, disablePush, pushSupported } from "./push";
 
 const hol = new HolidayTable(holidaysJson.holidays as Holiday[]);
@@ -283,6 +284,34 @@ function sideStatusLine(rules: Rule[]): string {
   return `<span class="st clear"><svg class="ic"><use href="#i-check"/></svg>clear${n ? ` - next ${fullFmt.format(n.start)}` : ""}</span>`;
 }
 
+// ---------- ticket times (lazy, static /data/sweep-times.json from scripts/build-ticket-times.ts) ----------
+interface SweepTimes { range: { from: string; to: string }; sides: Record<string, [number, number, number, number][]> }
+let timesP: Promise<SweepTimes | null> | null = null;
+function loadTimes(): Promise<SweepTimes | null> {
+  return (timesP ??= fetch(config.timesUrl).then((r) => (r.ok ? (r.json() as Promise<SweepTimes>) : null)).catch(() => null));
+}
+const monthFmt = new Intl.DateTimeFormat("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+const monthOf = (ymd: string) => monthFmt.format(new Date(`${ymd}T12:00:00Z`));
+function fillTimes(el: HTMLElement) {
+  void loadTimes().then((t) => {
+    if (!t) return;
+    let any = false;
+    el.querySelectorAll<HTMLElement>("[data-tix]").forEach((d) => {
+      const rules = rulesById.get(Number(d.dataset.tix))!;
+      const rows = t.sides[d.dataset.tix!] ?? [];
+      const side = esc(d.dataset.label ?? "");
+      d.innerHTML = sortByWeekday(rows.filter(([ri]) => rules[ri]), (x) => rules[x[0]]).map(([ri, med, iqr, n]) => {
+        const r = rules[ri];
+        const pre = `${side}${rules.length > 1 ? ` - ${esc(dayLabel(r.day))} ${hourLabel(r.from)}` : ""}: `;
+        return `<div class="tix-line" title="${n} citations, middle half within ${iqr} min">${pre}Tickets usually ~${clockFor(r.from, med)} (Pacific)</div>`;
+      }).join("");
+      any ||= rows.length > 0;
+    });
+    const note = el.querySelector<HTMLElement>(".tix-note");
+    if (note && any) { note.textContent = `Ticket times: typical street-cleaning citation time on this side, DataSF citations ${monthOf(t.range.from)} - ${monthOf(t.range.to)}. Posted sign wins.`; note.hidden = false; }
+  });
+}
+
 function showDetail(id: number) {
   const s = byId.get(id);
   if (!s) return;
@@ -290,6 +319,7 @@ function showDetail(id: number) {
   const el = $("detail");
   el.innerHTML = `<button class="close" aria-label="Close">Close</button>
     <h2>${esc(s.street)}</h2><div class="muted">${esc(s.limits)} - CNN ${esc(s.cnn)}</div>
+    <div class="tix-top">${pair.map((p) => `<div class="tix" data-tix="${p.id}" data-label="${esc(sideLabel(p.blockside, p.side))}"></div>`).join("")}<p class="fine tix-note" hidden></p></div>
     <div class="signs">${pair.map((p) => `<div class="side${p.id === id ? " picked" : ""}" data-id="${p.id}">
       <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
       ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}
@@ -298,6 +328,7 @@ function showDetail(id: number) {
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
     <button class="primary" id="park">Park here</button>`;
   el.hidden = false;
+  fillTimes(el);
   let chosen = id;
   el.querySelectorAll<HTMLElement>(".side").forEach((d) => d.addEventListener("click", () => {
     chosen = Number(d.dataset.id);
