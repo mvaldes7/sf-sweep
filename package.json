@@ -17,7 +17,8 @@
     "data": "node scripts/build-data.mjs",
     "data:sample": "node scripts/build-data.mjs --sample",
     "basemap": "bash scripts/build-basemap.sh",
-    "deploy:preview": "pnpm build && npx -y wrangler@4 pages deploy dist --project-name sf-sweep --branch feat-v1"
+    "deploy:preview": "pnpm build && npx -y wrangler@4 pages deploy dist --project-name sf-sweep --branch feat-v1",
+    "tickets": "node scripts/build-ticket-times.ts"
   },
   "dependencies": {
     "maplibre-gl": "^5.6.0",
