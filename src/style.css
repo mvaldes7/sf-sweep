@@ -110,3 +110,7 @@ body.safe-on .timelapse { display: none; }
 .side-next { font-size: 12px; font-weight: 600; text-align: center; }
 .side-safe { font-size: 12px; text-align: center; font-weight: 700; }
 .side-safe.yes { color: var(--safe); } .side-safe.no { color: var(--muted); }
+/* MOVE BY box follows the car-bar risk color */
+.moveby.safe { border-color: var(--clear); color: var(--clear); }
+.moveby.amber { border-color: var(--soon); color: var(--soon); }
+.moveby.red { border-color: var(--now); color: var(--now); }
