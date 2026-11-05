@@ -30,7 +30,7 @@
       <button id="mode-plan" role="tab" aria-selected="false">Plan by day</button>
     </div>
     <div id="chips" class="chips" hidden></div>
-    <div class="legend" aria-label="Legend">
+    <div id="legend" class="legend" aria-label="Legend: live status">
       <span class="lg clear"><i class="sw"></i>Clear</span>
       <span class="lg soon"><i class="sw"></i>Within 1 hr</span>
       <span class="lg now"><i class="sw"></i>Sweeping now</span>
@@ -39,7 +39,7 @@
 
   <section id="timelapse" class="timelapse panel">
     <div class="tl-row">
-      <button id="play" class="pill" aria-label="Pause timelapse">Pause</button>
+      <button id="play" class="pill" aria-label="Play timelapse">Play</button>
       <input id="scrub" type="range" min="0" max="72" value="0" step="1" aria-label="Time offset" />
       <button id="speed" class="pill" aria-label="Playback speed">1x</button>
     </div>
@@ -49,8 +49,10 @@
   <section id="plan" class="panel plan" hidden></section>
   <section id="car" class="panel car" hidden></section>
   <section id="detail" class="panel sheet" hidden></section>
+  <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true" hidden></div>
 
-  <footer class="attrib">
+  <footer class="attrib" id="attrib">
+    Map: <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a> &copy; <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>.
     Data: <a href="https://data.sf.gov/d/yhqp-riqs" target="_blank" rel="noopener">DataSF street sweeping</a>.
     Holidays: <a href="https://www.sfmta.com/getting-around/drive-park/holiday-enforcement-schedule" target="_blank" rel="noopener">SFMTA</a>.
     Posted signs are authoritative.
