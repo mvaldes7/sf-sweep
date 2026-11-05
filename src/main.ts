@@ -2,6 +2,8 @@ import maplibregl, { type GeoJSONSource, type StyleSpecification, type LayerSpec
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { buildMarks } from "./lib/marks";
+import { carRisk, nextText } from "./lib/risk";
+import { findSafeSides } from "./lib/safespot";
 import { trackHeight } from "./lib/layout";
 import "./style.css";
 import { GLYPHS_URL, type Scheme, basemapLabelLayers, basemapLayers, basemapSource } from "./lib/basemap";
@@ -38,8 +40,8 @@ let styleReady = false;
 
 const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
 const palette = () => darkQuery.matches
-  ? { bg: "#0b0b0d", water: "#0f1a24", road: "#1c1c22", clear: "#2a9d5c", soon: "#ffc83d", now: "#ff4d5e", casing: "#000000" }
-  : { bg: "#eef0f3", water: "#cfe0ee", road: "#ffffff", clear: "#3f9d68", soon: "#c98a00", now: "#d7263d", casing: "#ffffff" };
+  ? { bg: "#0b0b0d", water: "#0f1a24", road: "#1c1c22", clear: "#2a9d5c", soon: "#ffc83d", now: "#ff4d5e", casing: "#000000", safe: "#5eead4" }
+  : { bg: "#eef0f3", water: "#cfe0ee", road: "#ffffff", clear: "#3f9d68", soon: "#c98a00", now: "#d7263d", casing: "#ffffff", safe: "#0f766e" };
 
 /** Clear streets stay visible but recede so labels and amber/red read first. */
 const CLEAR_OPACITY = 0.7;
@@ -79,6 +81,9 @@ function style(): StyleSpecification {
     // dashed amber for within 1 hour
     { id: "sides-dash", type: "line", source: "sides", ...sl, layout: { "line-cap": "butt" },
       paint: { "line-color": c.soon, "line-width": width, "line-dasharray": [1.4, 1], "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "s"], 0], 1], 1, 0] } } as LayerSpecification,
+    // safe-spot highlight: only sides with feature-state safe=1 draw; set once per search, not per tick
+    { id: "sides-safe", type: "line", source: "sides", ...sl, layout: { "line-cap": "round" },
+      paint: { "line-color": c.safe, "line-width": wz(1.5), "line-opacity": ["case", ["==", ["coalesce", ["feature-state", "safe"], 0], 1], 1, 0] } } as LayerSpecification,
   );
   if (config.basemapPmtilesUrl) s.layers.push(...basemapLabelLayers(scheme()));
   s.sources.marks = { type: "geojson", data: { type: "FeatureCollection", features: [] } };
@@ -98,7 +103,7 @@ function addIcons() {
     map.addImage(name, img, { pixelRatio: 2 });
   }
 }
-map.on("style.load", () => { styleReady = true; addIcons(); lastState.clear(); render(); });
+map.on("style.load", () => { styleReady = true; addIcons(); lastState.clear(); render(); if (safe.on) applySafe(); });
 darkQuery.addEventListener("change", () => { styleReady = false; map.setStyle(style()); });
 // Feature state survives tile reloads, so only re-apply once per style load (not on every
 // sourcedata event, which fires for each tile while panning and used to redo 22k updates).
@@ -287,7 +292,9 @@ function showDetail(id: number) {
     <h2>${esc(s.street)}</h2><div class="muted">${esc(s.limits)} - CNN ${esc(s.cnn)}</div>
     <div class="signs">${pair.map((p) => `<div class="side${p.id === id ? " picked" : ""}" data-id="${p.id}">
       <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
-      ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}</div>`).join("")}</div>
+      ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}
+      <div class="side-next">${esc(nextText(nextSweep(rulesById.get(p.id)!, Date.now(), hol), Date.now()))}</div>
+      ${safe.on ? `<div class="side-safe ${safe.ids.has(p.id) ? "yes" : "no"}">${safe.ids.has(p.id) ? `No sweeping in the next ${safe.hours}h` : `Sweeping within ${safe.hours}h`}</div>` : ""}</div>`).join("")}</div>
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
     <button class="primary" id="park">Park here</button>`;
   el.hidden = false;
@@ -300,11 +307,58 @@ function showDetail(id: number) {
   $("park").addEventListener("click", () => { void park(chosen); });
 }
 
-for (const layer of ["sides-solid", "sides-dash"]) {
+for (const layer of ["sides-solid", "sides-dash", "sides-safe"]) {
   map.on("click", layer, (e) => { const f = e.features?.[0]; if (f?.id != null) showDetail(Number(f.id)); });
   map.on("mouseenter", layer, () => { map.getCanvas().style.cursor = "pointer"; });
   map.on("mouseleave", layer, () => { map.getCanvas().style.cursor = ""; });
 }
+
+// ---------- safe spot ----------
+const safe = { on: false, hours: 24 as 24 | 48, ids: new Set<number>(), center: [0, 0] as [number, number], fromCar: false };
+const BASE_OPACITY: Record<string, unknown> = {};
+const DIM = 0.12;
+function applySafe() {
+  const sl = config.pmtilesUrl ? "sides" : undefined;
+  for (const id of ["sides-glow", "sides-casing", "sides-solid", "sides-dash"]) {
+    if (!(id in BASE_OPACITY)) BASE_OPACITY[id] = map.getPaintProperty(id, "line-opacity");
+    // safe sides are drawn by sides-safe on top; everything else is dimmed. One restyle per toggle.
+    map.setPaintProperty(id, "line-opacity", safe.on
+      ? (id === "sides-glow" ? 0 : ["case", ["==", ["coalesce", ["feature-state", "safe"], 0], 1], 0, ["*", DIM, BASE_OPACITY[id] as number]])
+      : BASE_OPACITY[id] as maplibregl.ExpressionSpecification);
+  }
+  for (const id of safe.ids) map.setFeatureState({ source: "sides", sourceLayer: sl, id }, { safe: safe.on ? 1 : 0 });
+  map.setLayoutProperty("marks", "visibility", safe.on ? "none" : "visible");
+}
+function runSafe() {
+  const sl = config.pmtilesUrl ? "sides" : undefined;
+  for (const id of safe.ids) map.setFeatureState({ source: "sides", sourceLayer: sl, id }, { safe: 0 });
+  const car = loadCar();
+  safe.fromCar = !!car;
+  safe.center = car ? [car.lng, car.lat] : [map.getCenter().lng, map.getCenter().lat];
+  const r = findSafeSides(sides, rulesById, safe.center, Date.now(), safe.hours, hol);
+  safe.ids = new Set(r.safe);
+  applySafe();
+  $("safe").innerHTML = `<button class="close" id="safe-close" aria-label="Close safe spots">Done</button>
+    <div class="eyebrow">SAFE SPOTS NEARBY</div>
+    <div class="safe-sum"><b class="safe-n">${r.safe.length}</b> of ${r.nearby} block sides within 0.5 mi of ${safe.fromCar ? "your car" : "the map center"} have no sweeping in the next ${safe.hours}h.</div>
+    <div class="row"><div class="seg seg-sm" role="group" aria-label="Time window">
+      <button id="safe-24" aria-pressed="${safe.hours === 24}">24h</button><button id="safe-48" aria-pressed="${safe.hours === 48}">48h</button></div>
+      <span class="muted">Tap a highlighted block for its side and next sweep.</span></div>`;
+  $("safe").hidden = false;
+  $("safe-24").addEventListener("click", () => { safe.hours = 24; runSafe(); });
+  $("safe-48").addEventListener("click", () => { safe.hours = 48; runSafe(); });
+  $("safe-close").addEventListener("click", () => toggleSafe(false));
+  if (map.getZoom() < 14.5) map.easeTo({ center: safe.center, zoom: 15 });
+}
+function toggleSafe(force?: boolean) {
+  safe.on = force ?? !safe.on;
+  document.body.classList.toggle("safe-on", safe.on);
+  $("safe-btn").setAttribute("aria-pressed", String(safe.on));
+  if (safe.on) runSafe();
+  else { applySafe(); safe.ids.clear(); $("safe").hidden = true; }
+  renderCar();
+}
+$("safe-btn").addEventListener("click", () => toggleSafe());
 
 // ---------- car ----------
 async function park(id: number) {
@@ -344,19 +398,16 @@ function renderCar() {
   const s = byId.get(car.id)!;
   const rules = rulesById.get(car.id)!;
   const now = Date.now();
-  const st = statusFromClock(rules, clockAt(now), hol);
   const n = nextSweep(rules, now, hol);
   const left = n ? Math.max(0, n.start - now) : 0;
   const d = Math.floor(left / 86400000), h = Math.floor((left % 86400000) / 3600000), m = Math.floor((left % 3600000) / 60000);
-  const head = st === "now" ? `<span class="st now"><svg class="ic"><use href="#i-x"/></svg>Sweeping now - move your car</span>`
-    : st === "soon" ? `<span class="st soon"><svg class="ic"><use href="#i-clock"/></svg>Sweeping within 1 hr - move soon</span>`
-    : `<span class="st clear"><svg class="ic"><use href="#i-check"/></svg>Clear now - safe to stay</span>`;
   const al = alertStatus(car, { pushSupported: pushSupported(), apiConfigured: !!(config.apiBase && config.vapidPublicKey), blocked: notificationsBlocked() });
-  const short = n ? `Move by ${fullFmt.format(n.start)}` : "No sweeping in the next 10 weeks";
+  const risk = carRisk(n, now);
   el.innerHTML = `<div class="car-bar">
-      <div class="car-bar-main"><b>My car</b> ${head}<div class="muted car-bar-sub">${esc(short)} - ${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))}</div>
-        <div class="car-note ${al.kind}" role="status" aria-live="polite">${esc(al.text)}</div></div>
-      ${al.canArm ? `<button class="pill" id="car-alert">Alert me</button>` : ""}
+      <div class="car-bar-main"><div class="car-bar-top"><b>My car</b><span class="risk ${risk.level}" role="status" aria-live="polite">${esc(risk.text)}</span></div>
+        <div class="muted car-bar-sub">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))}</div>
+        <div class="car-note ${al.kind}">${esc(al.text)}</div>
+        <div class="car-actions">${al.canArm ? `<button class="pill sm" id="car-alert">Alert me</button>` : ""}<button class="pill sm" id="car-safe" aria-pressed="${safe.on}">Safe spot nearby</button></div></div>
       <button class="pill car-toggle" id="car-toggle" aria-expanded="${carExpanded}" aria-controls="car-more">${carExpanded ? "Less" : "More"}</button>
     </div>
     <div id="car-more" class="car-more">
@@ -373,6 +424,7 @@ function renderCar() {
       <button class="pill" id="car-moved">I moved</button>
     </div></div>`;
   el.classList.toggle("expanded", carExpanded);
+  el.querySelector("#car-safe")?.addEventListener("click", () => toggleSafe());
   el.querySelector("#car-toggle")?.addEventListener("click", () => { carExpanded = !carExpanded; renderCar(); });
   el.hidden = false;
   carMarker = new maplibregl.Marker({ color: "#ffffff" }).setLngLat([car.lng, car.lat]).addTo(map);
