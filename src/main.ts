@@ -4,7 +4,7 @@ import { Protocol } from "pmtiles";
 import { buildMarks } from "./lib/marks";
 import { carRisk, nextText } from "./lib/risk";
 import { findSafeSides } from "./lib/safespot";
-import { trackHeight } from "./lib/layout";
+import { bindMapViewport, trackHeight } from "./lib/layout";
 import "./style.css";
 import { GLYPHS_URL, type Scheme, basemapLabelLayers, basemapLayers, basemapSource } from "./lib/basemap";
 import { config } from "./config";
@@ -484,6 +484,10 @@ results.addEventListener("click", (e) => {
   map.flyTo({ center: s.mid, zoom: 17 });
   showDetail(s.id);
 });
+// iOS Safari often shrinks the visual viewport for the keyboard and does not
+// fire a container ResizeObserver event when it dismisses; bump the canvas then.
+q.addEventListener("blur", () => { requestAnimationFrame(() => map.resize()); });
+q.addEventListener("focus", () => { requestAnimationFrame(() => map.resize()); });
 function locate(silent = false) {
   if (!("geolocation" in navigator)) return;
   navigator.geolocation.getCurrentPosition(
@@ -510,6 +514,7 @@ renderChips();
 setMode("live");
 trackHeight($("car"), document.documentElement, "--car-h", window.ResizeObserver);
 trackHeight($("attrib"), document.documentElement, "--attrib-h", window.ResizeObserver);
+bindMapViewport(map, map.getContainer(), { RO: window.ResizeObserver });
 loadIndex().then(() => { render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
   .catch((e) => { $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
 if ("serviceWorker" in navigator && import.meta.env.PROD) void navigator.serviceWorker.register("/sw.js");
