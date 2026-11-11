@@ -74,6 +74,7 @@ Coordinates are integers at 1e-5 degrees (~1 m): lon = offset/100000 - 122,
 lat = offset/100000 + 37. Street names appear once; the committed gzip snapshot is ~1.4 MB.
 224,327 usable/deduplicated points from 224,349 source rows in the initial snapshot;
 6,643,431 bytes raw, 1,459,566 gzip, 812,407 Brotli. Pages handles HTTP compression.
+Initial JS grows by 3.97 kB raw / 1.52 kB gzip over main (MapLibre remains the dominant bundle).
 Only an address-shaped query lazy-loads this asset; street-only searches don't load it.
 User queries remain client-side. Network failure can be retried; street search still works.
 The service worker's existing same-origin network-first policy provides offline fallback

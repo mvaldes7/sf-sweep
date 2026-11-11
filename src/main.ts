@@ -471,6 +471,7 @@ function renderCar() {
 
 // ---------- search + locate ----------
 const q = $("q") as HTMLInputElement;
+q.disabled = true; // don't offer block selection until the sweep index has loaded
 const results = $("results");
 let addressHits: AddressHit[] = [];
 let searchVersion = 0;
@@ -578,6 +579,6 @@ setMode("live");
 trackHeight($("car"), document.documentElement, "--car-h", window.ResizeObserver);
 trackHeight($("attrib"), document.documentElement, "--attrib-h", window.ResizeObserver);
 bindMapViewport(map, map.getContainer(), { RO: window.ResizeObserver });
-loadIndex().then(() => { render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
-  .catch((e) => { $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
+loadIndex().then(() => { q.disabled = false; render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
+  .catch((e) => { q.disabled = false; $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
 if ("serviceWorker" in navigator && import.meta.env.PROD) void navigator.serviceWorker.register("/sw.js");
