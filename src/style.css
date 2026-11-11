@@ -110,3 +110,6 @@ body.safe-on .timelapse { display: none; }
 .side-next { font-size: 12px; font-weight: 600; text-align: center; }
 .side-safe { font-size: 12px; text-align: center; font-weight: 700; }
 .side-safe.yes { color: var(--safe); } .side-safe.no { color: var(--muted); }
+
+.search-status:not(:empty) { padding: 6px 12px; background: var(--panel, #fff); color: var(--fg, #111); border-radius: 8px; font-size: 12px; }
+.results li[aria-selected="true"] { outline: 2px solid #1680e8; outline-offset: -2px; }

@@ -8,16 +8,18 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit -p tsconfig.json && vite build && node scripts/check-asset-size.mjs public/data dist && node scripts/check-dist-data.mjs dist",
+    "dev": "node scripts/build-addresses.mjs && vite",
+    "build": "node scripts/build-addresses.mjs && tsc --noEmit -p tsconfig.json && vite build && node scripts/check-asset-size.mjs public/data dist && node scripts/check-dist-data.mjs dist",
     "preview": "vite preview",
     "lint": "eslint . && node scripts/check-no-emoji.mjs",
     "test": "vitest run",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p worker/tsconfig.json",
     "data": "node scripts/build-data.mjs",
     "data:sample": "node scripts/build-data.mjs --sample",
     "basemap": "bash scripts/build-basemap.sh",
     "deploy:preview": "pnpm build && npx -y wrangler@4 pages deploy dist --project-name sf-sweep --branch feat-v1",
+    "addresses:refresh": "node scripts/refresh-addresses.mjs",
     "tickets": "node scripts/build-ticket-times.ts"
   },
   "dependencies": {
@@ -27,6 +29,7 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250601.0",
     "@eslint/js": "^9.28.0",
+    "@playwright/test": "1.65.0",
     "@types/geojson": "^7946.0.16",
     "eslint": "^9.28.0",
     "globals": "^16.2.0",
