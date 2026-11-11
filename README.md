@@ -10,7 +10,7 @@ Mobile-first PWA showing San Francisco street cleaning status for each side of e
 - Park here: the spot is saved only on this device. Optional Web Push alert 1 hour before sweeping
   (Cloudflare Worker + D1 storing only the push subscription, spot and fire time), plus an .ics fallback.
 - SFMTA holiday enforcement calendar applied (`src/data/holidays.json`).
-- Offline street search over the dataset (no geocoder), browser geolocation for "locate me".
+- Client-side house-number search using DataSF EAS address points (lazy static index; `pnpm addresses:refresh` to update, see docs/DATA.md), plus offline street search (no geocoder), browser geolocation for "locate me".
 - Dark map by default, light mode follows the system setting.
 
 Street cleaning only; tow-away and other restrictions are out of scope. Posted signs are authoritative.

@@ -6,6 +6,7 @@ import { carRisk, nextText } from "./lib/risk";
 import { findSafeSides } from "./lib/safespot";
 import { bindMapViewport, trackHeight } from "./lib/layout";
 import "./style.css";
+import { parseAddress, loadAddresses, lookupAddresses, selectAddressSide, type AddressHit } from "./lib/addresses";
 import { GLYPHS_URL, type Scheme, basemapLabelLayers, basemapLayers, basemapSource } from "./lib/basemap";
 import { config } from "./config";
 import holidaysJson from "./data/holidays.json";
@@ -470,19 +471,82 @@ function renderCar() {
 
 // ---------- search + locate ----------
 const q = $("q") as HTMLInputElement;
+q.disabled = true; // don't offer block selection until the sweep index has loaded
 const results = $("results");
-q.addEventListener("input", () => {
-  const hits = searchStreets(sides, q.value);
-  results.hidden = hits.length === 0;
-  results.innerHTML = hits.map((h) => `<li role="option" data-id="${h.id}"><b>${esc(h.street)}</b> <span class="muted">${esc(h.limits)}</span></li>`).join("");
-});
+let addressHits: AddressHit[] = [];
+let searchVersion = 0;
+let activeResult = -1;
+function displayResults(html: string) {
+  results.innerHTML = html;
+  results.hidden = !html;
+  activeResult = -1;
+  q.removeAttribute("aria-activedescendant");
+  q.setAttribute("aria-expanded", String(!!html));
+}
+q.addEventListener("input", () => { void updateSearch(); });
+async function updateSearch() {
+  const version = ++searchVersion;
+  const query = q.value;
+  addressHits = [];
+  if (parseAddress(query)) {
+    displayResults("");
+    $("search-status").textContent = "Loading addresses...";
+    try {
+      const index = await loadAddresses();
+      if (version !== searchVersion) return;
+      addressHits = lookupAddresses(index, query);
+      displayResults(addressHits.map((h, i) => `<li id="search-${i}" role="option" aria-selected="false" data-address="${i}"><b>${esc(h.label)}</b> <span class="muted">${h.baseFallback ? "Base address; suffix not found" : "Address point"}</span></li>`).join(""));
+      $("search-status").textContent = addressHits.length ? `${addressHits.length} address results` : "No address found. Try the street name without a house number.";
+    } catch {
+      if (version === searchVersion) $("search-status").textContent = "Addresses unavailable. Try the street name without a house number.";
+    }
+  } else {
+    const hits = searchStreets(sides, query);
+    displayResults(hits.map((h, i) => `<li id="search-${i}" role="option" aria-selected="false" data-id="${h.id}"><b>${esc(h.street)}</b> <span class="muted">${esc(h.limits)}</span></li>`).join(""));
+    $("search-status").textContent = "";
+  }
+}
+function chooseResult(li: HTMLElement) {
+  ++searchVersion; // discard a pending async search after selection
+  if (li.dataset.address !== undefined) {
+    const hit = addressHits[Number(li.dataset.address)];
+    if (!hit) return;
+    q.value = hit.label;
+    map.flyTo({ center: hit.point, zoom: 17 });
+    const side = selectAddressSide(sides, hit);
+    if (side) {
+      showDetail(side.id);
+      showToast("Estimated address side selected. Check both sides and the posted sign.");
+    } else {
+      $("detail").hidden = true;
+      showToast("Address found; no matching sweeping segment. Check the posted sign.");
+    }
+  } else {
+    const s = byId.get(Number(li.dataset.id));
+    if (!s) return;
+    q.value = `${s.street}, ${s.limits}`;
+    map.flyTo({ center: s.mid, zoom: 17 });
+    showDetail(s.id);
+  }
+  displayResults(""); $("search-status").textContent = ""; q.blur();
+}
 results.addEventListener("click", (e) => {
-  const li = (e.target as HTMLElement).closest("li");
-  if (!li) return;
-  const s = byId.get(Number(li.dataset.id))!;
-  results.hidden = true; q.value = `${s.street}, ${s.limits}`; q.blur();
-  map.flyTo({ center: s.mid, zoom: 17 });
-  showDetail(s.id);
+  const li = (e.target as HTMLElement).closest<HTMLElement>("li");
+  if (li) chooseResult(li);
+});
+q.addEventListener("keydown", e => {
+  const options = Array.from(results.querySelectorAll<HTMLElement>("li"));
+  if (e.key === "Escape") { ++searchVersion; displayResults(""); $("search-status").textContent = ""; }
+  if (!options.length) return;
+  if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+    e.preventDefault();
+    activeResult = (activeResult + (e.key === "ArrowDown" ? 1 : options.length - 1) + options.length) % options.length;
+    options.forEach((el, i) => el.setAttribute("aria-selected", String(i === activeResult)));
+    q.setAttribute("aria-activedescendant", options[activeResult].id);
+    options[activeResult].scrollIntoView({ block: "nearest" });
+  } else if (e.key === "Enter") {
+    e.preventDefault(); chooseResult(options[Math.max(0, activeResult)]);
+  }
 });
 // iOS Safari often shrinks the visual viewport for the keyboard and does not
 // fire a container ResizeObserver event when it dismisses; bump the canvas then.
@@ -515,6 +579,6 @@ setMode("live");
 trackHeight($("car"), document.documentElement, "--car-h", window.ResizeObserver);
 trackHeight($("attrib"), document.documentElement, "--attrib-h", window.ResizeObserver);
 bindMapViewport(map, map.getContainer(), { RO: window.ResizeObserver });
-loadIndex().then(() => { render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
-  .catch((e) => { $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
+loadIndex().then(() => { q.disabled = false; render(); renderCar(); const car = loadCar(); if (car) map.jumpTo({ center: [car.lng, car.lat], zoom: 16.5 }); else locate(true); })
+  .catch((e) => { q.disabled = false; $("tl-label").textContent = `Could not load sweep data (${(e as Error).message}). Run the data pipeline, see docs/DATA.md.`; });
 if ("serviceWorker" in navigator && import.meta.env.PROD) void navigator.serviceWorker.register("/sw.js");
