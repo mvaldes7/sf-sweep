@@ -12,3 +12,9 @@ tmp
 .vapid-private.key
 !.env.example
 .cache
+
+/public/addresses.json
+
+/test-results
+/playwright-report
+/address-shots

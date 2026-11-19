@@ -19,11 +19,12 @@
   <header class="top">
     <div class="search">
       <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
-      <input id="q" type="search" placeholder="Search street or block" autocomplete="off" aria-label="Search street or block" />
+      <input id="q" type="search" role="combobox" aria-autocomplete="list" aria-controls="results" aria-expanded="false" placeholder="Search address, street or block" autocomplete="off" aria-label="Search address, street or block" />
       <button id="locate" class="icon-btn" aria-label="Locate me">
         <svg class="ic" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
       </button>
     </div>
+    <div id="search-status" class="search-status" role="status" aria-live="polite"></div>
     <ul id="results" class="results" role="listbox" hidden></ul>
     <div class="seg" role="tablist">
       <button id="mode-live" role="tab" aria-selected="true">Live now + 6h</button>
@@ -57,7 +58,7 @@
 
   <footer class="attrib" id="attrib">
     Map: <a href="https://protomaps.com" target="_blank" rel="noopener">Protomaps</a> &copy; <a href="https://openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>, <a href="https://maplibre.org" target="_blank" rel="noopener">MapLibre</a>.
-    Data: <a href="https://data.sf.gov/d/yhqp-riqs" target="_blank" rel="noopener">DataSF street sweeping</a>.
+    Data: <a href="https://data.sf.gov/d/yhqp-riqs" target="_blank" rel="noopener">DataSF street sweeping</a>, <a href="https://data.sf.gov/d/3mea-di5p" target="_blank" rel="noopener">EAS addresses (PDDL)</a>.
     Holidays: <a href="https://www.sfmta.com/getting-around/drive-park/holiday-enforcement-schedule" target="_blank" rel="noopener">SFMTA</a>.
     Posted signs are authoritative.
   </footer>
