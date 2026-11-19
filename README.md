@@ -22,13 +22,31 @@ Requires Node 22+ and pnpm 10.
 ```
 pnpm install
 pnpm data        # fetch DataSF and build public/data (needed to see streets)
+pnpm tickets     # typical citation times -> public/data/sweep-times.json (gitignored)
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 - `src/lib/schedule.ts` - schedule rules, week of month, holiday skip, status at time t, next sweep
 - `scripts/build-data.mjs` - data pipeline (see docs/DATA.md)
+- `scripts/build-ticket-times.ts` - ticket times (`pnpm tickets`)
 - `worker/` - push alert Worker (see docs/DEPLOY.md)
+
+## Deploy
+
+See docs/DEPLOY.md. Production builds need generated data first:
+
+```
+pnpm data
+pnpm tickets
+pnpm basemap
+pnpm build
+```
+
+`pnpm tickets` is required for a production build (`sweep-times.json` is gitignored). For a faster
+recovery, copy that file from a prior deployment into `public/data/` before building instead of
+rerunning the citations pipeline. CI sets `ALLOW_MISSING_DATA=1` so the build guard is skipped there;
+never set it for a deploy.
 
 ## Data and assumptions
 

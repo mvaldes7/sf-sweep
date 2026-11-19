@@ -28,12 +28,17 @@ Everything here fits the Cloudflare free plan. Do not enable Workers Paid, custo
 5. Build data and the PWA, then create the Pages project by direct upload (free):
    ```
    pnpm data
+   pnpm tickets
+   pnpm basemap
    cp .env.example .env.production.local   # fill VITE_API_BASE with your workers.dev URL
    pnpm build
    npx wrangler pages project create sf-sweep --production-branch main
    npx wrangler pages deploy dist --project-name sf-sweep --branch feat-v1   # preview
    ```
-   `dist/data/` carries the sweep data and basemap.
+   `dist/data/` carries the sweep data, ticket times, and basemap.
+   `pnpm tickets` writes gitignored `public/data/sweep-times.json`. For a faster recovery when you
+   do not need to rerun the citations pipeline, copy an existing `sweep-times.json` from a prior
+   deployment into `public/data/` before `pnpm build`.
 7. If the Pages URL differs from `sf-sweep.pages.dev`, update `ALLOWED_ORIGIN` in `worker/wrangler.toml` and redeploy.
 8. On iPhone (iOS 16.4+): open the Pages URL in Safari, Share > Add to Home Screen, open from the Home Screen,
    save a spot and tap "Turn on alert". Push does not work in a normal Safari tab; use the .ics reminder there.
@@ -41,6 +46,8 @@ Everything here fits the Cloudflare free plan. Do not enable Workers Paid, custo
 ## Data refresh
 
 DataSF updates the schedule "as needed". Re-run `pnpm data` and redeploy when it changes.
+Re-run `pnpm tickets` when you want updated typical citation times, or copy `sweep-times.json`
+from a prior deployment into `public/data/` before building if the existing file is enough.
 Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
 
 ## Basemap (Protomaps, SF extract)
@@ -53,9 +60,12 @@ R2 is not used (decision 2026-11-04): all static data, including the basemap, is
 
 ## Build guard
 
-`pnpm build` fails with "Missing generated data" unless `dist/data/` has `sweep-index.json`, `sweep-sides.geojson`
-and the basemap tiles (`data/basemap/meta.json`, `0/0/0.mvt`, and z15 tiles). Run `pnpm data` and `pnpm basemap`
-first. CI sets `ALLOW_MISSING_DATA=1` because it has no generated data; never set it for a deploy.
+`pnpm build` fails with "Missing generated data" unless `dist/data/` has `sweep-index.json`, `sweep-sides.geojson`,
+`sweep-times.json`, and the basemap tiles (`data/basemap/meta.json`, `0/0/0.mvt`, and z15 tiles). Run `pnpm data`,
+`pnpm tickets`, and `pnpm basemap` first. `ALLOW_MISSING_DATA=1` still skips the whole check, including ticket times;
+CI sets it because it has no generated data. Never set it for a deploy.
+If `sweep-times.json` is the only missing file and you do not need to rebuild citation stats, copy it from a prior
+deployment into `public/data/` before `pnpm build`.
 Deploy a preview with `pnpm deploy:preview` (builds, so the guard runs first). Basemap tiles are stored
 uncompressed (MVT protobuf, not gzip) and served with `Content-Type: application/vnd.mapbox-vector-tile`;
 Pages compresses them on the wire. `public/404.html` makes missing paths return 404 (the app has no client routes).
