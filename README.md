@@ -17,7 +17,9 @@ Street cleaning only; tow-away and other restrictions are out of scope. Posted s
 
 ## Develop
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22+ and pnpm 10. `pnpm tickets` needs Node >= 22.18, because it runs
+`scripts/build-ticket-times.ts` directly with Node's built-in type stripping (no experimental flag).
+The package.json `engines` field is still `>=22` for the rest of the app.
 
 ```
 pnpm install
@@ -44,9 +46,16 @@ pnpm build
 ```
 
 `pnpm tickets` is required for a production build (`sweep-times.json` is gitignored). For a faster
-recovery, copy that file from a prior deployment into `public/data/` before building instead of
-rerunning the citations pipeline. CI sets `ALLOW_MISSING_DATA=1` so the build guard is skipped there;
-never set it for a deploy.
+recovery, fetch that file from a specific older Pages deployment with `curl --fail` instead of
+rerunning the citations pipeline. Never fetch it from the production hostname
+(https://sf-sweep.pages.dev):
+
+```
+curl --fail -o public/data/sweep-times.json \
+  https://800eb8a5.sf-sweep.pages.dev/data/sweep-times.json
+```
+
+CI sets `ALLOW_MISSING_DATA=1` so the build guard is skipped there; never set it for a deploy.
 
 ## Data and assumptions
 
