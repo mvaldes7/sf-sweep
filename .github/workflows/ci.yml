@@ -34,15 +34,15 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec playwright install --with-deps chromium
-      # Read-only public assets; no Cloudflare credentials or deployment writes.
-      - name: Download current public sweeping data
+      # Committed fixtures for the e2e addresses (534 30th Ave, 1000 Valencia St).
+      # No live-site download, no R2, and no pinned deployment URL.
+      - name: Install fixture sweeping data
         run: |
-          for file in sweep-index.json sweep-sides.geojson sweep-times.json; do
-            curl --fail --retry 2 "https://sf-sweep.pages.dev/data/$file" -o "public/data/$file"
-          done
+          mkdir -p public/data
+          cp tests/fixtures/data/sweep-index.json tests/fixtures/data/sweep-sides.geojson tests/fixtures/data/sweep-times.json public/data/
       - run: pnpm test:e2e
         env:
-          VITE_BASEMAP_PMTILES_URL: https://sf-sweep.pages.dev/data/basemap/{z}/{x}/{y}.mvt
+          VITE_BASEMAP_PMTILES_URL: off
       - uses: actions/upload-artifact@v4
         if: always()
         with:

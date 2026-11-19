@@ -1,0 +1,153 @@
+{
+  "generated": "2026-11-05T06:43:52.267Z",
+  "source": "DataSF Street Sweeping Schedule (yhqp-riqs), https://data.sf.gov/d/yhqp-riqs",
+  "sides": [
+    {
+      "id": 769,
+      "cnn": "13069000",
+      "side": "R",
+      "street": "Valencia St",
+      "limits": "21st St - Hill St",
+      "blockside": "West",
+      "mid": [
+        -122.421124,
+        37.756499
+      ],
+      "r": [
+        [
+          1,
+          6,
+          8,
+          10,
+          0
+        ],
+        [
+          1,
+          6,
+          8,
+          21,
+          0
+        ],
+        [
+          3,
+          6,
+          8,
+          10,
+          0
+        ],
+        [
+          3,
+          6,
+          8,
+          21,
+          0
+        ],
+        [
+          5,
+          6,
+          8,
+          10,
+          0
+        ],
+        [
+          5,
+          6,
+          8,
+          21,
+          0
+        ]
+      ]
+    },
+    {
+      "id": 9504,
+      "cnn": "13069000",
+      "side": "L",
+      "street": "Valencia St",
+      "limits": "21st St - Hill St",
+      "blockside": "East",
+      "mid": [
+        -122.421034,
+        37.756505
+      ],
+      "r": [
+        [
+          2,
+          6,
+          8,
+          10,
+          0
+        ],
+        [
+          2,
+          6,
+          8,
+          21,
+          0
+        ],
+        [
+          4,
+          6,
+          8,
+          10,
+          0
+        ],
+        [
+          4,
+          6,
+          8,
+          21,
+          0
+        ]
+      ]
+    },
+    {
+      "id": 19466,
+      "cnn": "1642000",
+      "side": "R",
+      "street": "30th Ave",
+      "limits": "Geary Blvd - Anza St",
+      "blockside": "West",
+      "mid": [
+        -122.490069,
+        37.77888
+      ],
+      "r": [
+        [
+          5,
+          7,
+          8,
+          21,
+          0
+        ],
+        [
+          5,
+          7,
+          8,
+          26,
+          0
+        ]
+      ]
+    },
+    {
+      "id": 20807,
+      "cnn": "1642000",
+      "side": "L",
+      "street": "30th Ave",
+      "limits": "Geary Blvd - Anza St",
+      "blockside": "East",
+      "mid": [
+        -122.489978,
+        37.778884
+      ],
+      "r": [
+        [
+          4,
+          10,
+          12,
+          10,
+          0
+        ]
+      ]
+    }
+  ]
+}
