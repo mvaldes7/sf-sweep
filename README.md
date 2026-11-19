@@ -17,18 +17,45 @@ Street cleaning only; tow-away and other restrictions are out of scope. Posted s
 
 ## Develop
 
-Requires Node 22+ and pnpm 10.
+Requires Node 22+ and pnpm 10. `pnpm tickets` needs Node >= 22.18, because it runs
+`scripts/build-ticket-times.ts` directly with Node's built-in type stripping (no experimental flag).
+The package.json `engines` field is still `>=22` for the rest of the app.
 
 ```
 pnpm install
 pnpm data        # fetch DataSF and build public/data (needed to see streets)
+pnpm tickets     # typical citation times -> public/data/sweep-times.json (gitignored)
 pnpm dev
 pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 - `src/lib/schedule.ts` - schedule rules, week of month, holiday skip, status at time t, next sweep
 - `scripts/build-data.mjs` - data pipeline (see docs/DATA.md)
+- `scripts/build-ticket-times.ts` - ticket times (`pnpm tickets`)
 - `worker/` - push alert Worker (see docs/DEPLOY.md)
+
+## Deploy
+
+See docs/DEPLOY.md. Production builds need generated data first:
+
+```
+pnpm data
+pnpm tickets
+pnpm basemap
+pnpm build
+```
+
+`pnpm tickets` is required for a production build (`sweep-times.json` is gitignored). For a faster
+recovery, fetch that file from a specific older Pages deployment with `curl --fail` instead of
+rerunning the citations pipeline. Never fetch it from the production hostname
+(https://sf-sweep.pages.dev):
+
+```
+curl --fail -o public/data/sweep-times.json \
+  https://800eb8a5.sf-sweep.pages.dev/data/sweep-times.json
+```
+
+CI sets `ALLOW_MISSING_DATA=1` so the build guard is skipped there; never set it for a deploy.
 
 ## Data and assumptions
 

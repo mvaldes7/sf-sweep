@@ -31,6 +31,11 @@ export function makeTempFiles(files) {
   for (const [name, size] of Object.entries(files)) { const p = join(d, name); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, ""); truncateSync(p, size); }
   return d;
 }
+export function writeTempFiles(files) {
+  const d = mkdtempSync(join(tmpdir(), "sz-"));
+  for (const [name, body] of Object.entries(files)) { const p = join(d, name); mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, body); }
+  return d;
+}
 export function readJsonIfExists(file) {
   return existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : null;
 }
