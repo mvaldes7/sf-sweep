@@ -15,6 +15,9 @@ Mobile-first PWA showing San Francisco street cleaning status for each side of e
 
 Street cleaning only; tow-away and other restrictions are out of scope. Posted signs are authoritative.
 
+See `instructions.md` for contributor setup, tests, deploys and project rules, and `ROADMAP.md` for what has
+shipped and what is planned.
+
 ## Develop
 
 Requires Node 22+ and pnpm 10. `pnpm tickets` needs Node >= 22.18, because it runs
