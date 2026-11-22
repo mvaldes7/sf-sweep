@@ -38,6 +38,7 @@ function compactRule(rule) {
   if (day === null || from === null || to === null || bits === null || bits === 0) return { error: "invalid rule day, time or weeks" };
   if (!(from >= 0 && from < 24)) return { error: "from must be in 00:00-23:59" };
   if (!(to > 0 && to <= 24)) return { error: "to must be in 00:01-24:00" };
+  if (from === to) return { error: "from and to must differ" };
   return { rule: [day === "H" ? 7 : day, from, to, bits, rule.holidays ? 1 : 0] };
 }
 

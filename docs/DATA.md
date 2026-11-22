@@ -59,7 +59,13 @@ and blockside, when present, must match the DataSF side or the data build fails.
 `.ics` all use the corrected hours. The app shows a "Corrected from posted sign" label with the date. Posted
 signs remain authoritative. A deploy is required before production shows a new correction.
 
-`scripts/check-dist-data.mjs` validates the file even when `ALLOW_MISSING_DATA=1`.
+After changing corrections, rerun `pnpm tickets` as well as `pnpm data`. Ticket-window stats are keyed by
+rule index on each side; a correction that adds, removes or reorders rules will point those stats at the
+wrong window if you reuse an older `sweep-times.json`. A `sweep-times.json` copied from an older Pages
+deployment will not line up for corrected sides.
+
+`scripts/check-dist-data.mjs` validates the file even when `ALLOW_MISSING_DATA=1`. On a full data build it
+also checks that each correction appears on the matching side in `sweep-index.json` with a `corrected` flag.
 
 ## Holidays
 

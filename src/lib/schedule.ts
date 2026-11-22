@@ -147,18 +147,38 @@ function addYmd(ymd: string, days: number): string {
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
 
-/** Epoch ms for a Pacific wall-clock time on a local YYYY-MM-DD date (`minutes` may be 1440 for midnight at the end of the day). */
+/**
+ * Epoch ms for a Pacific wall-clock time on a local YYYY-MM-DD date (`minutes` may be 1440
+ * for midnight at the end of the day). On the fall-back night the repeated 1 AM hour resolves
+ * to the earlier (daylight-time) instant. A skipped spring-forward hour returns the first
+ * instant after the gap, so a 2-3 AM window that night has end <= start and is dropped.
+ */
 export function sfAt(ymd: string, minutes: number): number {
   if (minutes >= 1440) return sfAt(addYmd(ymd, Math.floor(minutes / 1440)), minutes % 1440);
   const [y, m, d] = ymd.split("-").map(Number);
-  let t = Date.UTC(y, m - 1, d, 8, 0, 0) + minutes * MIN; // PST guess
+  // Seed from daylight time (UTC-7) so the first 1:00 on fall-back night is found first.
+  let t = Date.UTC(y, m - 1, d, 7, 0, 0) + minutes * MIN;
+  const matches: number[] = [];
+  const after: number[] = [];
+  const seen = new Set<number>();
   for (let i = 0; i < 8; i++) {
+    if (seen.has(t)) break;
+    seen.add(t);
     const p = sfParts(t);
     const got = minutesOf(p);
     const dayDelta = (Date.UTC(y, m - 1, d) - Date.UTC(p.y, p.m - 1, p.d)) / 86_400_000;
-    if (dayDelta === 0 && got === minutes) return t;
+    if (dayDelta === 0 && got === minutes) {
+      matches.push(t);
+      const earlier = t - HOUR;
+      const pe = sfParts(earlier);
+      if (pe.y === y && pe.m === m && pe.d === d && minutesOf(pe) === minutes) matches.push(earlier);
+      break;
+    }
+    if (dayDelta === 0 && got > minutes) after.push(t);
     t += (dayDelta * 1440 + (minutes - got)) * MIN;
   }
+  if (matches.length) return Math.min(...matches);
+  if (after.length) return Math.min(...after);
   return t;
 }
 
@@ -185,7 +205,9 @@ function intervalsInRange(rules: Rule[], fromYmd: string, days: number, hol: Hol
       if (!ruleAppliesOnDate(r, p, hol)) continue;
       const start = sfAt(ymd, minutesFromHours(r.from));
       const endAt = windowEndYmd(ymd, r);
-      raw.push({ start, end: sfAt(endAt.ymd, endAt.minutes) });
+      const end = sfAt(endAt.ymd, endAt.minutes);
+      if (end <= start) continue; // zero-length, e.g. 2-3 AM on the spring-forward night
+      raw.push({ start, end });
     }
   }
   raw.sort((a, b) => a.start - b.start || a.end - b.end);
@@ -208,31 +230,31 @@ export function statusAt(rules: Rule[], t: Date | number, hol: HolidayTable): St
 }
 
 /** Precomputed local parts for a time t, so many sides can be evaluated with few Intl calls. */
-export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts; tomorrow: LocalParts }
+export interface Clock { t: number; now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts; tomorrow: LocalParts }
 export function clockAt(t: Date | number): Clock {
   const ms = typeof t === "number" ? t : t.getTime();
   const nb = nextHourBoundary(ms);
   const now = sfParts(ms), next = sfParts(nb);
   return {
-    now, next, minsToNext: (nb - ms) / MIN,
+    t: ms, now, next, minsToNext: (nb - ms) / MIN,
     nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next),
     tomorrow: nextDayParts(ms, now),
   };
 }
 
-/** Minutes until this rule's next start after p, if that start is today or tomorrow. */
-function minsUntilStart(rule: Rule, p: LocalParts, tomorrow: LocalParts, hol: HolidayTable): number | null {
+/** Real minutes until this rule's next start after t, if that start is today or tomorrow. */
+function minsUntilStart(rule: Rule, t: number, p: LocalParts, hol: HolidayTable): number | null {
   const from = minutesFromHours(rule.from);
-  const m = minutesOf(p);
-  if (ruleAppliesOnDate(rule, p, hol) && from > m) return from - m;
-  if (ruleAppliesOnDate(rule, tomorrow, hol)) return 1440 - m + from;
-  return null;
+  const today = ruleAppliesOnDate(rule, p, hol) && from > minutesOf(p);
+  const startYmd = today ? p.ymd : addYmd(p.ymd, 1);
+  if (!today && !ruleAppliesOnDate(rule, partsForYmd(startYmd), hol)) return null;
+  return (sfAt(startYmd, from) - t) / MIN;
 }
 
 export function statusFromClock(rules: Rule[], c: Clock, hol: HolidayTable): Status {
   if (rules.some((r) => partsActive(r, c.now, () => c.nowPrev, hol))) return "now";
   for (const r of rules) {
-    const d = minsUntilStart(r, c.now, c.tomorrow, hol);
+    const d = minsUntilStart(r, c.t, c.now, hol);
     if (d !== null && d > 0 && d <= AMBER_WINDOW_MIN) return "soon";
   }
   return "clear";

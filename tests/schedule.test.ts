@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import holidaysJson from "../src/data/holidays.json";
 import {
-  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, nextSweep, parseWeekday, sfParts,
+  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, nextSweep, parseWeekday, sfAt, sfParts,
   statusAt, sweptOnDate, weekOfMonth, weeksLabel,
 } from "../src/lib/schedule";
 import { decodeRule, encodeRule, searchStreets, type SideRecord } from "../src/lib/data";
@@ -216,5 +216,42 @@ describe("half-hour windows", () => {
     const n = nextSweep([late], pst("2026-11-13T07:00:00"), none)!;
     expect(n.start).toBe(pst("2026-11-13T07:30:00").getTime());
     expect(n.end).toBe(pst("2026-11-13T08:00:00").getTime());
+  });
+});
+
+describe("DST instants and elapsed time", () => {
+  it("sfAt picks the first 1 AM on fall-back night (2026-11-01 and 2027-11-07)", () => {
+    expect(sfAt("2026-11-01", 60)).toBe(Date.UTC(2026, 10, 1, 8, 0, 0));
+    expect(sfAt("2027-11-07", 60)).toBe(Date.UTC(2027, 10, 7, 8, 0, 0));
+    const sun1 = rule({ day: 0, from: 1, to: 2 });
+    const n = nextSweep([sun1], pdt("2026-10-31T12:00:00"), none)!;
+    expect(n.start).toBe(Date.UTC(2026, 10, 1, 8, 0, 0));
+    // Exclusive end is the unique 2:00 PST (10:00Z), after both 1 AM hours.
+    expect(n.end).toBe(Date.UTC(2026, 10, 1, 10, 0, 0));
+  });
+
+  it("drops the spring-forward 2-3 AM window (zero-length at 3:00)", () => {
+    const sun23 = rule({ day: 0, from: 2, to: 3 });
+    // 2026-03-08 skips 2 AM; that occurrence is dropped, next is Sun Mar 15 2-3 AM PDT
+    const n = nextSweep([sun23], pst("2026-03-07T12:00:00"), none)!;
+    expect(n.start).toBe(pdt("2026-03-15T02:00:00").getTime());
+    expect(n.end).toBe(pdt("2026-03-15T03:00:00").getTime());
+    expect(sfAt("2026-03-08", 2 * 60)).toBe(sfAt("2026-03-08", 3 * 60));
+  });
+
+  it("status soon uses real elapsed time across the spring-forward jump", () => {
+    const sun3 = rule({ day: 0, from: 3, to: 4 });
+    // 1:00 PST -> 3:00 PDT is 60 real minutes; 0:59 PST is 61
+    expect(statusAt([sun3], pst("2026-03-08T01:00:00"), none)).toBe("soon");
+    expect(statusAt([sun3], pst("2026-03-08T01:30:00"), none)).toBe("soon");
+    expect(statusAt([sun3], pst("2026-03-08T00:59:00"), none)).toBe("clear");
+  });
+
+  it("status soon uses real elapsed time across the fall-back repeat hour", () => {
+    const sun230 = rule({ day: 0, from: 2.5, to: 4 });
+    // First 1:30 PDT (08:30Z) to 2:30 PST (10:30Z) is 120 real minutes, so not soon
+    expect(statusAt([sun230], pdt("2026-11-01T01:30:00"), none)).toBe("clear");
+    // Second 1:30 PST (09:30Z) to 2:30 PST is 60 real minutes, so soon
+    expect(statusAt([sun230], pst("2026-11-01T01:30:00"), none)).toBe("soon");
   });
 });
