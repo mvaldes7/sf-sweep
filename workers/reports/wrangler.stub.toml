@@ -8,17 +8,17 @@ workers_dev = true
 
 [vars]
 ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
+# TODO: public Turnstile site key (not the secret). Leave empty until the Turnstile site is created.
 TURNSTILE_SITE_KEY = ""
 
-# TODO: replace database_id after `wrangler d1 create sf-sweep-reports`.
 [[d1_databases]]
 binding = "DB"
 database_name = "sf-sweep-reports"
-database_id = "TODO-replace-after-d1-create"
+database_id = "970b90d1-0ad2-4424-9807-517bca2a85a0"
 
-[[r2_buckets]]
+[[kv_namespaces]]
 binding = "PHOTOS"
-bucket_name = "sf-sweep-sign-photos"
+id = "2e73ed962475440fb4a7edc35981cf78"
 
 [[ratelimits]]
 name = "API_LIMITER"

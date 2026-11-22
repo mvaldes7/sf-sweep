@@ -1,7 +1,7 @@
 /**
- * Proposed src/data/corrections.json entry in the schema introduced by sf-sweep PR #12
- * (not yet on main when this landed). This module generates an entry only; it never
- * writes the file, opens a PR, or deploys.
+ * Proposed src/data/corrections.json entry, using the same schema as the
+ * versioned corrections file on main. This module generates an entry only; it
+ * never writes the file, opens a PR, or deploys.
  *
  * Entry shape: { cnn, side, street?, limits?, blockside?, rules, source, reported, note? }
  * Each rule: { day, weeks, from, to, holidays? } with HH:MM times (minute precision, e.g. "07:30").

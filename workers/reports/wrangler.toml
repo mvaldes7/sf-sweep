@@ -8,18 +8,17 @@ workers_dev = true
 
 [vars]
 ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
-# Public Turnstile site key (not the secret). Filled after the Turnstile site is created.
+# TODO: public Turnstile site key (not the secret). Leave empty until the Turnstile site is created.
 TURNSTILE_SITE_KEY = ""
 
-# TODO: replace database_id after `wrangler d1 create sf-sweep-reports`.
 [[d1_databases]]
 binding = "DB"
 database_name = "sf-sweep-reports"
-database_id = "TODO-replace-after-d1-create"
+database_id = "970b90d1-0ad2-4424-9807-517bca2a85a0"
 
-[[r2_buckets]]
+[[kv_namespaces]]
 binding = "PHOTOS"
-bucket_name = "sf-sweep-sign-photos"
+id = "2e73ed962475440fb4a7edc35981cf78"
 
 # Account-unique integer for this Worker (sf-sweep-alerts uses 1801). Free-plan rate limiting binding.
 [[ratelimits]]
@@ -31,13 +30,14 @@ simple = { limit = 5, period = 60 }
 [env.dev]
 [env.dev.vars]
 ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev,http://localhost:5173"
+# TODO: public Turnstile site key (not the secret). Leave empty until the Turnstile site is created.
 TURNSTILE_SITE_KEY = ""
 
 [[env.dev.d1_databases]]
 binding = "DB"
 database_name = "sf-sweep-reports"
-database_id = "TODO-replace-after-d1-create"
+database_id = "970b90d1-0ad2-4424-9807-517bca2a85a0"
 
-[[env.dev.r2_buckets]]
+[[env.dev.kv_namespaces]]
 binding = "PHOTOS"
-bucket_name = "sf-sweep-sign-photos"
+id = "2e73ed962475440fb4a7edc35981cf78"

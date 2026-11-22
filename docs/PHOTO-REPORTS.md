@@ -2,14 +2,12 @@
 
 Users can report a posted street-cleaning sign with a photo. Reports go to a review
 queue. Nothing on the map changes until a report is confirmed, and a confirmed
-report only produces a proposed `src/data/corrections.json` entry (the schema from
-PR #12). There is no automatic commit, merge or deploy.
+report only produces a proposed `src/data/corrections.json` entry (same schema as
+the versioned corrections file). There is no automatic commit, merge or deploy.
 
-The corrections file from PR #12 was not on `main` when this landed. The generator
-in `workers/reports/src/corrections.ts` matches that schema (cnn, side, optional
-street/limits/blockside, rules with `HH:MM` times including `:30`, source, reported
-date, optional note). Merge or rebase onto #12 before relying on the file being
-present in this repo.
+The generator in `workers/reports/src/corrections.ts` matches that schema (cnn, side,
+optional street/limits/blockside, rules with `HH:MM` times including `:30`, source,
+reported date, optional note).
 
 ## Feature flag (off by default)
 
@@ -31,10 +29,10 @@ other than `sf-sweep-reports`.
 
 | Resource | Type | Name / ID | Notes |
 | --- | --- | --- | --- |
-| `sf-sweep-sign-photos` | R2 bucket | name: `sf-sweep-sign-photos` | Photos only. The Nov 4, 2026 decision not to use R2 was for static/basemap data. |
-| `sf-sweep-reports` | D1 database | `database_id` in `workers/reports/wrangler.toml` | Schema: `workers/reports/schema.sql` |
+| `sf-sweep-sign-photos` | KV namespace | `2e73ed962475440fb4a7edc35981cf78` | Photos, keyed by report id. Used instead of R2 (R2 is not enabled on this account; the Nov 4, 2026 decision also kept R2 off for static/basemap data). |
+| `sf-sweep-reports` | D1 database | `970b90d1-0ad2-4424-9807-517bca2a85a0` | Schema: `workers/reports/schema.sql` |
 | `sf-sweep-reports` | Worker | https://sf-sweep-reports.miggyman7.workers.dev | Live code must stay the 503 stub until Mike OKs the real Worker |
-| Turnstile site | Turnstile | public `TURNSTILE_SITE_KEY` in wrangler `[vars]` and `VITE_TURNSTILE_SITE_KEY` | Secret is the `TURNSTILE_SECRET` Worker secret |
+| Turnstile site | Turnstile | TODO: public `TURNSTILE_SITE_KEY` (not created yet) | Fill wrangler `[vars]` and `VITE_TURNSTILE_SITE_KEY` after the site exists. Secret is the `TURNSTILE_SECRET` Worker secret |
 | Rate limiting | Workers rate-limit binding | `namespace_id` `1802` in wrangler.toml | 5 requests / 60 seconds |
 | `REVIEW_TOKEN` | Worker secret | set with `wrangler secret put` | Not in git. Box path (if generated here): `/workspace/secrets/sfsweep_review_token.txt` |
 
@@ -43,7 +41,8 @@ other than `sf-sweep-reports`.
 From `workers/reports/`:
 
 ```
-npx wrangler r2 bucket create sf-sweep-sign-photos
+npx wrangler kv namespace create sf-sweep-sign-photos
+# put the printed id into wrangler.toml and wrangler.stub.toml
 npx wrangler d1 create sf-sweep-reports
 # put the printed database_id into wrangler.toml and wrangler.stub.toml
 npx wrangler d1 execute sf-sweep-reports --remote --file=schema.sql
@@ -77,11 +76,11 @@ The review API is `GET/POST /api/review/...` and requires
 - `POST /api/review/:id/edit` updates optional days and times on a pending report
 - `POST /api/review/:id/reject` rejects it
 - `POST /api/review/:id/confirm` confirms it and returns `{ correction }` in the
-  PR #12 entry shape. The Worker does not write git.
+  corrections-file entry shape. The Worker does not write git.
 
 ## Submit
 
 `POST /api/reports` (multipart, CORS-limited to the Pages origins): one JPEG, PNG
 or WebP photo (3 MB cap), block side, device geolocation, optional days and
 `HH:MM` times, Turnstile token. The Worker strips EXIF (including GPS) before the
-object is stored in R2.
+value is stored in the `sf-sweep-sign-photos` KV namespace (keyed by report id, 3 MB cap).

@@ -12,7 +12,7 @@ function req(path: string, init: RequestInit = {}, ip = "203.0.113.9"): Request 
 function env(over: Partial<Env> = {}): Env {
   return {
     DB: {} as D1Database,
-    PHOTOS: {} as R2Bucket,
+    PHOTOS: {} as KVNamespace,
     ALLOWED_ORIGIN: "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev",
     TURNSTILE_SITE_KEY: "site",
     TURNSTILE_SECRET: "secret",

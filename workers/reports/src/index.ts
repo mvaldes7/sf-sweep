@@ -1,17 +1,17 @@
 /**
- * sf-sweep-reports: accept a sign photo + optional hours, store in R2 + D1, and
+ * sf-sweep-reports: accept a sign photo + optional hours, store in KV + D1, and
  * serve a review queue. A confirmed report returns a proposed corrections.json
- * entry (PR #12 schema) and does not write git or deploy the map.
+ * entry (same schema as src/data/corrections.json) and does not write git or deploy the map.
  *
  * Do not deploy this module without Mike's explicit OK. The live placeholder is src/stub.ts.
  */
-import { extFor, mimeFor, stripExif, MAX_PHOTO_BYTES } from "./exif";
+import { mimeFor, stripExif, MAX_PHOTO_BYTES } from "./exif";
 import { proposedCorrection, normalizeClock, parseDay, normalizeWeeks, reportedDate, type CorrectionRule } from "./corrections";
 import { fieldsFromForm, validateSubmit, type SubmitFields } from "./validate";
 
 export interface Env {
   DB: D1Database;
-  PHOTOS: R2Bucket;
+  PHOTOS: KVNamespace;
   ALLOWED_ORIGIN: string;
   TURNSTILE_SITE_KEY: string;
   TURNSTILE_SECRET: string;
@@ -169,8 +169,8 @@ async function handleSubmit(req: Request, env: Env, cors: Record<string, string>
   if (!ok) throw new HttpError(403, "turnstile failed");
 
   const id = crypto.randomUUID();
-  const key = `reports/${id}.${extFor(stripped.kind)}`;
-  await env.PHOTOS.put(key, stripped.bytes, { httpMetadata: { contentType: mimeFor(stripped.kind) } });
+  const key = id; // KV key is the report id
+  await env.PHOTOS.put(key, stripped.bytes, { metadata: { contentType: mimeFor(stripped.kind) } });
   const now = Date.now();
   await env.DB.prepare(
     `INSERT INTO reports (id, status, cnn, side, street, limits, blockside, lat, lng, days, from_time, to_time, weeks, holidays, note, photo_key, photo_type, created_at)
@@ -199,9 +199,10 @@ async function handleReviewOne(env: Env, id: string, cors: Record<string, string
 async function handleReviewPhoto(env: Env, id: string, cors: Record<string, string>): Promise<Response> {
   const row = await env.DB.prepare("SELECT photo_key, photo_type FROM reports WHERE id = ?").bind(id).first<{ photo_key: string; photo_type: string }>();
   if (!row) throw new HttpError(404, "not found");
-  const obj = await env.PHOTOS.get(row.photo_key);
-  if (!obj) throw new HttpError(404, "photo missing");
-  return new Response(obj.body, { status: 200, headers: { ...cors, "content-type": row.photo_type, "cache-control": "private, max-age=300" } });
+  const got = await env.PHOTOS.getWithMetadata<{ contentType?: string }>(row.photo_key, "arrayBuffer");
+  if (got.value == null) throw new HttpError(404, "photo missing");
+  const ct = got.metadata?.contentType || row.photo_type || "application/octet-stream";
+  return new Response(got.value, { status: 200, headers: { ...cors, "content-type": ct, "cache-control": "private, max-age=300" } });
 }
 
 async function handleReviewAction(req: Request, env: Env, id: string, action: string, cors: Record<string, string>): Promise<Response> {
