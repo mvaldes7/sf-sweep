@@ -3,6 +3,11 @@ import type { Rule, Weekday } from "./schedule";
 /** Compact rule as written by scripts/build-data.mjs: [day(0-6, 7=holiday-only), from, to, weekBits, holidays(0|1)] */
 export type CompactRule = [number, number, number, number, number];
 
+export interface SideCorrection {
+  source: string;
+  reported: string; // YYYY-MM-DD
+  note?: string;
+}
 export interface SideRecord {
   id: number; // feature id shared with line geometry
   cnn: string;
@@ -12,6 +17,8 @@ export interface SideRecord {
   blockside: string;
   mid: [number, number]; // lon, lat
   r: CompactRule[];
+  /** Present when scripts/build-data.mjs applied a posted-sign correction. */
+  corrected?: SideCorrection;
 }
 export interface SweepIndex {
   generated: string;

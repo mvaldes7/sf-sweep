@@ -13,9 +13,11 @@ What it does:
 1. Pages through SODA (50,000 rows per request, no API key needed).
 2. Groups rows into one feature per (cnn, side). DataSF gives the shared centerline for both sides, so each side is
    offset about 4 m: `L` to the left of the digitized direction, `R` to the right (`scripts/offset.mjs`).
-3. Writes `sweep-index.json` (compact rules + labels + label point per side, used for status, sign cards and the
+3. Applies `src/data/corrections.json` (posted-sign overrides for specific cnn + side). Matching sides get the
+   corrected rules and a `corrected` record (source, date reported, optional note).
+4. Writes `sweep-index.json` (compact rules + labels + label point per side, used for status, sign cards and the
    offline street search) and `sweep-sides.geojson` (offset lines, feature id = `fid`).
-4. If `tippecanoe` is installed (or `TIPPECANOE=/path/to/tippecanoe`), writes `sweep.pmtiles` with layer `sides`.
+5. If `tippecanoe` is installed (or `TIPPECANOE=/path/to/tippecanoe`), writes `sweep.pmtiles` with layer `sides`.
 
 Last full run while building v1 (2026-11-02): 37,878 rows, 22,556 sides, 22 rows skipped (null geometry).
 
@@ -38,10 +40,32 @@ or run `pnpm basemap`; it is served from Pages at /data/sf-basemap.pmtiles (`VIT
 ## Assumptions and gaps
 
 - Week of month = ceil(day / 7): days 1-7 are week 1, 29-31 are week 5. DataSF does not document this.
-- Hours are SF local time (America/Los_Angeles). `tohour` <= `fromhour` is treated as midnight.
+- Hours are SF local time (America/Los_Angeles). DataSF `fromhour`/`tohour` are integers; corrections may use
+  minute-precision times such as 7:30 (`7.5` hours past midnight). `to` of 0 means midnight (24:00);
+  a crossing window is `to > 0 && to < from` (for example 22-2).
 - Rows with weekday "Holiday" apply only on dates in `src/data/holidays.json`.
 - Side offset direction depends on how each centerline was digitized; spot-check against `blockside`.
 - Posted signs win. The app says so on every sign card.
+
+
+## Schedule corrections
+
+`src/data/corrections.json` is version-controlled and overrides DataSF for specific block sides (CNN + L/R).
+Each entry has the corrected weekday, weeks of month and hours (`HH:MM`, including half hours such as `07:30`),
+the source (for example "posted sign, reported by Mike"), the date reported, and an optional note. Street, limits
+and blockside, when present, must match the DataSF side or the data build fails.
+
+`pnpm data` applies the file in `scripts/build-data.mjs`, so the map, My car, MOVE BY, the rendered sign and
+`.ics` all use the corrected hours. The app shows a "Corrected from posted sign" label with the date. Posted
+signs remain authoritative. A deploy is required before production shows a new correction.
+
+After changing corrections, rerun `pnpm tickets` as well as `pnpm data`. Ticket-window stats are keyed by
+rule index on each side; a correction that adds, removes or reorders rules will point those stats at the
+wrong window if you reuse an older `sweep-times.json`. A `sweep-times.json` copied from an older Pages
+deployment will not line up for corrected sides.
+
+`scripts/check-dist-data.mjs` validates the file even when `ALLOW_MISSING_DATA=1`. On a full data build it
+also checks that each correction appears on the matching side in `sweep-index.json` with a `corrected` flag.
 
 ## Holidays
 

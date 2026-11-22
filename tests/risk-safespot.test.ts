@@ -54,7 +54,7 @@ describe("DST transitions (America/Los_Angeles)", () => {
     const sun1am = rule({ day: 0, from: 1, to: 2 });
     const now = pdt("2026-10-31T12:00:00");
     expect(horizonClocks(now, 24)).toHaveLength(24);
-    expect(freeForHorizon([sun1am], horizonClocks(now, 24), none)).toBe(false);
+    expect(freeForHorizon([sun1am], now, 24, none)).toBe(false);
   });
 });
 
@@ -88,4 +88,21 @@ describe("safe spot search", () => {
   it("48h: Monday 9 AM PST (46 real hours away) is caught", () =>
     expect(findSafeSides(sides, rules, center, now, 48, none)).toEqual({ safe: [2], nearby: 2 }));
   it("distance is about right", () => expect(Math.round(distanceM([-122.42, 37.77], [-122.42, 37.78]))).toBe(1112));
+});
+
+describe("half-hour risk and safe-spot horizon", () => {
+  const fri730 = rule({ day: 5, from: 7, to: 7.5 });
+  it("MOVE BY / risk labels use a 7:30 end", () => {
+    const now = pst("2026-11-13T07:15:00");
+    const n = nextSweep([fri730], now, none)!;
+    expect(n.end).toBe(pst("2026-11-13T07:30:00"));
+    expect(carRisk(n, now)).toEqual({ level: "red", text: "Sweeping now until 7:30 AM" });
+    expect(whenText(pst("2026-11-13T07:30:00"), pst("2026-11-12T12:00:00"))).toBe("Fri 7:30 AM");
+  });
+  it("a 7:30-8:00 window is not missed by a 1h horizon starting on the hour", () => {
+    const late = rule({ day: 5, from: 7.5, to: 8 });
+    const at7 = pst("2026-11-13T07:00:00");
+    expect(freeForHorizon([late], at7, 1, none)).toBe(false);
+    expect(freeForHorizon([late], pst("2026-11-13T06:00:00"), 1, none)).toBe(true);
+  });
 });
