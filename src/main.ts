@@ -3,6 +3,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
 import { buildMarks } from "./lib/marks";
 import { carRisk, nextText } from "./lib/risk";
+import { openReportForm, reportsEnabled } from "./lib/report-ui";
 import { findSafeSides } from "./lib/safespot";
 import { bindMapViewport, trackHeight } from "./lib/layout";
 import "./style.css";
@@ -327,7 +328,8 @@ function showDetail(id: number) {
       <div class="side-next">${esc(nextText(nextSweep(rulesById.get(p.id)!, Date.now(), hol), Date.now()))}</div>
       ${safe.on ? `<div class="side-safe ${safe.ids.has(p.id) ? "yes" : "no"}">${safe.ids.has(p.id) ? `No sweeping in the next ${safe.hours}h` : `Sweeping within ${safe.hours}h`}</div>` : ""}</div>`).join("")}</div>
     <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
-    <button class="primary" id="park">Park here</button>`;
+    <button class="primary" id="park">Park here</button>
+    ${reportsEnabled() ? `<button class="pill" id="report-sign" type="button">Report a sign</button>` : ""}`;
   el.hidden = false;
   fillTimes(el);
   let chosen = id;
@@ -337,6 +339,10 @@ function showDetail(id: number) {
   }));
   el.querySelector(".close")!.addEventListener("click", () => { el.hidden = true; });
   $("park").addEventListener("click", () => { void park(chosen); });
+  el.querySelector("#report-sign")?.addEventListener("click", () => {
+    const chosenSide = byId.get(chosen);
+    if (chosenSide) openReportForm(chosenSide, el);
+  });
 }
 
 for (const layer of ["sides-solid", "sides-dash", "sides-safe"]) {
@@ -454,6 +460,7 @@ function renderCar() {
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
       <a class="pill" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat},${car.lng}" target="_blank" rel="noopener">Directions</a>
       <button class="pill" id="car-moved">I moved</button>
+      ${reportsEnabled() ? `<button class="pill" id="car-report" type="button">Report a sign</button>` : ""}
     </div></div>`;
   el.classList.toggle("expanded", carExpanded);
   el.querySelector("#car-safe")?.addEventListener("click", () => toggleSafe());
@@ -467,6 +474,7 @@ function renderCar() {
     const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "street-cleaning.ics"; a.click();
   });
   el.querySelector("#car-moved")?.addEventListener("click", () => { void disablePush().finally(() => { clearCar(); renderCar(); }); });
+  el.querySelector("#car-report")?.addEventListener("click", () => openReportForm(s, el));
 }
 
 // ---------- search + locate ----------

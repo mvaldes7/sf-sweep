@@ -1,0 +1,26 @@
+# Placeholder deploy only. Returns 503 for every request until Mike OKs the real Worker.
+# Usage: npx wrangler deploy -c wrangler.stub.toml
+# Do not point this file at src/index.ts.
+name = "sf-sweep-reports"
+main = "src/stub.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
+TURNSTILE_SITE_KEY = ""
+
+# TODO: replace database_id after `wrangler d1 create sf-sweep-reports`.
+[[d1_databases]]
+binding = "DB"
+database_name = "sf-sweep-reports"
+database_id = "TODO-replace-after-d1-create"
+
+[[r2_buckets]]
+binding = "PHOTOS"
+bucket_name = "sf-sweep-sign-photos"
+
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "1802"
+simple = { limit = 5, period = 60 }

@@ -3,7 +3,7 @@ import tseslint from "typescript-eslint";
 import globals from "globals";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "data", "public/data", "worker/.wrangler", "tmp"] },
+  { ignores: ["dist", "node_modules", "data", "public/data", "worker/.wrangler", "workers/reports/.wrangler", "tmp"] },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   { languageOptions: { globals: { ...globals.browser, ...globals.node, ...globals.serviceworker } } }

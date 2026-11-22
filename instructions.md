@@ -35,9 +35,10 @@ Production: https://sf-sweep.pages.dev.
 | Basemap | Protomaps SF extract unpacked to static `/data/basemap/{z}/{x}/{y}.mvt` tiles; glyphs in `public/fonts` | `scripts/build-basemap.sh` |
 | Schedule and risk | Week of month, holiday skip, ticket risk, nearby safe spots | `src/lib/schedule.ts`, `src/lib/risk.ts`, `src/lib/safespot.ts`, `src/data/holidays.json` |
 | Push worker | Cloudflare Worker + D1, cron `* * * * *` | `worker/` (`worker/wrangler.toml`, `worker/schema.sql`) |
+| Photo reports | Sign-photo reports and a review queue (issue #10). UI is behind `VITE_PHOTO_REPORTS`, off by default | `workers/reports/`, `docs/PHOTO-REPORTS.md`, `src/lib/report-ui.ts` |
 | Tests | Vitest unit tests; Playwright e2e (house-number search) | `tests/`, `e2e/address-search.spec.ts` |
 | CI | GitHub Actions jobs `check` and `browser` | `.github/workflows/ci.yml` |
-| Hosting | Cloudflare Pages (direct upload; no Git integration), Workers Free, D1. R2 is not used | `wrangler.toml`, `docs/DEPLOY.md` |
+| Hosting | Cloudflare Pages (direct upload; no Git integration), Workers Free, D1. R2 is used only for sign-photo reports (not the basemap) | `wrangler.toml`, `docs/DEPLOY.md`, `docs/PHOTO-REPORTS.md` |
 
 ## 3. Local setup and commands
 
