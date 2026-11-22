@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import holidaysJson from "../src/data/holidays.json";
 import {
-  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, nextSweep, parseWeekday, sfParts,
+  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, mergeRuleWeeks, nextSweep, parseWeekday, sfParts,
   statusAt, sweptOnDate, weekOfMonth, weeksLabel,
 } from "../src/lib/schedule";
 import { decodeRule, encodeRule, searchStreets, type SideRecord } from "../src/lib/data";
@@ -173,5 +173,31 @@ describe("overnight windows crossing midnight", () => {
     const wk1 = rule({ day: 6, from: 23, to: 1, weeks: [true, false, false, false, false] }); // 1st Sat
     expect(activeAt([wk1], pst("2026-11-08T00:30:00"), none)).toBe(true); // Sun Nov 8 tail of Sat Nov 7
     expect(activeAt([wk1], pst("2026-11-15T00:30:00"), none)).toBe(false);
+  });
+});
+
+describe("mergeRuleWeeks", () => {
+  const w = (weeks: Rule["weeks"], extra: Partial<Rule> = {}): Rule => rule({ weeks, ...extra });
+  it("unions weeks of the same weekday and window, and labels EVERY WEEK when all five are covered", () => {
+    const a = w([true, false, true, false, true]); // 1st/3rd/5th Friday 9-11
+    const b = w([false, true, false, true, true]); // 2nd/4th/5th Friday 9-11
+    const merged = mergeRuleWeeks([a, b]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].weeks).toEqual([true, true, true, true, true]);
+    expect(weeksLabel(merged[0].weeks)).toBe("EVERY WEEK");
+  });
+  it("does not merge different days or different windows", () => {
+    const fri = w(ALL);
+    const thu = w(ALL, { day: 4 });
+    const later = w(ALL, { from: 10, to: 12 });
+    expect(mergeRuleWeeks([fri, thu, later])).toHaveLength(3);
+  });
+  it("keeps holidays flags distinct and is idempotent", () => {
+    const skip = w([true, false, true, false, false]);
+    const also = w([false, true, false, true, false], { holidays: true });
+    expect(mergeRuleWeeks([skip, also])).toHaveLength(2);
+    const once = mergeRuleWeeks([skip, w([false, true, false, true, false])]);
+    expect(weeksLabel(once[0].weeks)).toBe("1st, 2nd, 3rd & 4th OF MONTH");
+    expect(mergeRuleWeeks(once)).toEqual(once);
   });
 });

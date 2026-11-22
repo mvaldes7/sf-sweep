@@ -170,6 +170,28 @@ export function sweptOnDate(rules: Rule[], t: Date | number | LocalParts, hol: H
   return rules.some((r) => ruleAppliesOnDate(r, p, hol));
 }
 
+/**
+ * Combine rules that share a weekday and time window, unioning their weeks of month.
+ * DataSF often splits "every week" into two rows (1st/3rd/5th and 2nd/4th/5th); the merged
+ * weeks then cover all five and `weeksLabel` returns "EVERY WEEK".
+ */
+export function mergeRuleWeeks(rules: Rule[]): Rule[] {
+  const out: Rule[] = [];
+  const idx = new Map<string, number>();
+  for (const r of rules) {
+    const key = `${r.day}|${r.from}|${r.to}|${r.holidays ? 1 : 0}`;
+    const i = idx.get(key);
+    if (i === undefined) {
+      idx.set(key, out.length);
+      out.push({ ...r, weeks: [r.weeks[0], r.weeks[1], r.weeks[2], r.weeks[3], r.weeks[4]] });
+    } else {
+      const w = out[i].weeks;
+      out[i].weeks = [w[0] || r.weeks[0], w[1] || r.weeks[1], w[2] || r.weeks[2], w[3] || r.weeks[3], w[4] || r.weeks[4]];
+    }
+  }
+  return out;
+}
+
 const ORD = ["1st", "2nd", "3rd", "4th", "5th"];
 export function weeksLabel(weeks: boolean[]): string {
   if (weeks.every(Boolean)) return "EVERY WEEK";
