@@ -3,6 +3,7 @@
 // Set ALLOW_MISSING_DATA=1 to skip (CI only; CI has no generated data).
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { CORRECTIONS_PATH, invalidCorrections, loadCorrections } from "./corrections.mjs";
 
 export const REQUIRED_FILES = ["data/sweep-index.json", "data/sweep-sides.geojson", "data/sweep-times.json", "data/basemap/meta.json", "data/basemap/0/0/0.mvt"];
 
@@ -22,6 +23,15 @@ export function missingData(dist = "dist") {
  * Skips missing or empty files; those are reported by missingData.
  * An HTML 404 (or any other non-JSON body) saved under these names fails.
  */
+export function invalidCorrectionsFile(path = CORRECTIONS_PATH) {
+  if (!existsSync(path) || statSync(path).size === 0) return [`${path}: missing or empty`];
+  try {
+    return invalidCorrections(JSON.parse(readFileSync(path, "utf8"))).map((m) => `${path}: ${m}`);
+  } catch {
+    return [`${path}: not valid JSON`];
+  }
+}
+
 export function invalidJsonData(dist = "dist") {
   const problems = [];
   const check = (rel, validate) => {
@@ -67,11 +77,39 @@ export function invalidJsonData(dist = "dist") {
   return problems;
 }
 
+/** When a built index is present, every corrections entry must appear with a `corrected` flag. */
+export function invalidCorrectedIndex(index, corrections = loadCorrections()) {
+  const problems = [];
+  if (!index || !Array.isArray(index.sides)) return ["sweep-index.json: sides must be an array"];
+  for (const c of corrections.corrections || []) {
+    const hits = index.sides.filter((s) => String(s.cnn) === String(c.cnn) && s.side === c.side);
+    if (!hits.length) {
+      problems.push(`sweep-index.json: correction cnn ${c.cnn} side ${c.side} was not applied (side missing)`);
+      continue;
+    }
+    for (const s of hits) {
+      if (!s.corrected || typeof s.corrected !== "object") {
+        problems.push(`sweep-index.json: side ${s.id} (cnn ${c.cnn} ${c.side}) is missing the corrected flag`);
+      }
+    }
+  }
+  return problems;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
-  if (process.env.ALLOW_MISSING_DATA === "1") { console.log("data check skipped (ALLOW_MISSING_DATA=1)"); process.exit(0); }
+  const corr = invalidCorrectionsFile();
+  if (process.env.ALLOW_MISSING_DATA === "1") {
+    if (corr.length) { console.error(`Invalid corrections file:\n  ${corr.join("\n  ")}`); process.exit(1); }
+    console.log("data check skipped (ALLOW_MISSING_DATA=1)"); process.exit(0);
+  }
   const dist = process.argv[2] || "dist";
   const missing = missingData(dist);
-  const invalid = invalidJsonData(dist);
+  const invalid = [...invalidJsonData(dist), ...corr];
+  const indexPath = join(dist, "data/sweep-index.json");
+  if (existsSync(indexPath) && statSync(indexPath).size > 0) {
+    try { invalid.push(...invalidCorrectedIndex(JSON.parse(readFileSync(indexPath, "utf8")))); }
+    catch { /* unreadable JSON is already reported by invalidJsonData */ }
+  }
   if (missing.length || invalid.length) {
     if (missing.length) console.error(`Missing generated data in ${dist}/:\n  ${missing.join("\n  ")}`);
     if (invalid.length) console.error(`Invalid generated data in ${dist}/:\n  ${invalid.join("\n  ")}`);

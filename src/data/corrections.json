@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "corrections": [
+    {
+      "cnn": "1642000",
+      "side": "R",
+      "street": "30th Ave",
+      "limits": "Geary Blvd - Anza St",
+      "blockside": "West",
+      "rules": [
+        {
+          "day": "Fri",
+          "weeks": [1, 2, 3, 4, 5],
+          "from": "07:00",
+          "to": "07:30",
+          "holidays": false
+        }
+      ],
+      "source": "posted sign, reported by Mike",
+      "reported": "2026-11-21",
+      "note": "Posted sign is every Friday 7:00 to 7:30 AM, except holidays. DataSF has two Friday 7-8 AM rows (1st/3rd/5th and 2nd/4th/5th) that together already cover every Friday, but end at 8:00."
+    }
+  ]
+}

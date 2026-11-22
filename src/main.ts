@@ -265,6 +265,13 @@ $("chips").addEventListener("click", (e) => {
 });
 
 // ---------- signs ----------
+function correctedNote(c: SideRecord["corrected"]): string {
+  if (!c) return "";
+  const d = new Date(`${c.reported}T12:00:00Z`);
+  const when = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(d);
+  return `<p class="fine corrected-note">Corrected from posted sign · ${esc(when)}</p>`;
+}
+
 function signHtml(rules: Rule[]): string {
   const signs = mergeRuleWeeks(rules);
   if (!signs.length) return `<div class="sign"><div class="sign-h">NO SCHEDULE</div><div class="sign-sub">No sweeping data for this side</div></div>`;
@@ -326,8 +333,9 @@ function showDetail(id: number) {
       <div class="side-h">${esc(sideLabel(p.blockside, p.side).toUpperCase())}</div>
       ${signHtml(rulesById.get(p.id)!)}${sideStatusLine(rulesById.get(p.id)!)}
       <div class="side-next">${esc(nextText(nextSweep(rulesById.get(p.id)!, Date.now(), hol), Date.now()))}</div>
+      ${p.corrected ? correctedNote(p.corrected) : ""}
       ${safe.on ? `<div class="side-safe ${safe.ids.has(p.id) ? "yes" : "no"}">${safe.ids.has(p.id) ? `No sweeping in the next ${safe.hours}h` : `Sweeping within ${safe.hours}h`}</div>` : ""}</div>`).join("")}</div>
-    <p class="fine">Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
+    <p class="fine">${pair.some((p) => p.corrected) ? "Hours on a marked side were corrected from a posted sign. " : ""}Sign generated from DataSF fields (weekday, from/to hour, week1-5, holidays). Posted signs are authoritative.</p>
     <button class="primary" id="park">Park here</button>`;
   el.hidden = false;
   fillTimes(el);
@@ -450,6 +458,7 @@ function renderCar() {
       ${n ? `<div class="count"><span>${d}<small>day</small></span><span>${h}<small>hrs</small></span><span>${m}<small>min</small></span></div>
       <div class="moveby ${risk.level}"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
       <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
+      ${s.corrected ? correctedNote(s.corrected) : ""}
     </div><div class="car-sign">${signHtml(n ? mergeRuleWeeks(rules).filter(r => ruleActiveAt(r, n.start, hol)).slice(0, 1) : mergeRuleWeeks(rules).slice(0, 1))}</div></div>
     <div class="row">
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
