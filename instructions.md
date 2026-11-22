@@ -30,6 +30,7 @@ Production: https://sf-sweep.pages.dev.
 | App | Vite 6, TypeScript, MapLibre GL, PMTiles (GeoJSON fallback). No Mapbox, no tokens | `src/main.ts`, `index.html`, `src/lib/basemap.ts` |
 | Runtime | Node 22+ (CI uses 24), pnpm 10.33.4 (`packageManager` in `package.json`). `pnpm tickets` needs Node >= 22.18 | `package.json` |
 | Sweep data | DataSF Street Sweeping Schedule (`yhqp-riqs`). Output is gitignored under `public/data/` | `scripts/build-data.mjs`, `docs/DATA.md` |
+| Schedule corrections | Versioned posted-sign overrides applied at `pnpm data` | `src/data/corrections.json`, `scripts/corrections.mjs` |
 | Ticket times | DataSF SFMTA parking citations (`ab4h-6ztd`, STR CLEAN only). `pnpm tickets` writes `public/data/sweep-times.json` | `scripts/build-ticket-times.ts`, `src/lib/tickettimes.ts` |
 | Addresses | Committed DataSF EAS snapshot; `pnpm dev` / `pnpm build` expand it. Queries stay on-device | `scripts/data/addresses.json.gz`, `scripts/build-addresses.mjs`, `src/lib/addresses.ts` |
 | Basemap | Protomaps SF extract unpacked to static `/data/basemap/{z}/{x}/{y}.mvt` tiles; glyphs in `public/fonts` | `scripts/build-basemap.sh` |

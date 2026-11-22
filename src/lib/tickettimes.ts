@@ -29,10 +29,13 @@ function prevDay(p: LocalParts): LocalParts {
 export function matchWindows(rules: Rule[], p: LocalParts, hol: HolidayTable): { rule: number; mins: number }[] {
   const out: { rule: number; mins: number }[] = [];
   rules.forEach((r, i) => {
-    const crosses = r.to > 0 && r.to < r.from;
-    const end = r.to === 0 || crosses ? 24 : r.to;
-    if (p.h >= r.from && p.h < end && ruleAppliesOnDate(r, p, hol)) out.push({ rule: i, mins: (p.h - r.from) * 60 + p.min });
-    else if (crosses && p.h < r.to && ruleAppliesOnDate(r, prevDay(p), hol)) out.push({ rule: i, mins: (24 - r.from + p.h) * 60 + p.min });
+    const from = Math.round(r.from * 60);
+    const toRaw = Math.round(r.to * 60);
+    const crosses = toRaw > 0 && toRaw < from;
+    const end = toRaw === 0 || crosses ? 1440 : toRaw;
+    const startMin = p.h * 60 + p.min;
+    if (startMin >= from && startMin < end && ruleAppliesOnDate(r, p, hol)) out.push({ rule: i, mins: startMin - from });
+    else if (crosses && startMin < toRaw && ruleAppliesOnDate(r, prevDay(p), hol)) out.push({ rule: i, mins: 1440 - from + startMin });
   });
   return out;
 }
@@ -61,9 +64,9 @@ export function windowStat(samples: { mins: number; ymd: string }[]): TimeStat |
   return { median: Math.round(quantile(kept, 0.5)), iqr: Math.round(iqr), n: samples.length, days };
 }
 
-/** "9:12 AM" for a window starting at `fromHour` plus `mins`. */
+/** "9:12 AM" for a window starting at `fromHour` plus `mins`. `fromHour` may be fractional (7.5 = 7:30). */
 export function clockFor(fromHour: number, mins: number): string {
-  const total = (fromHour * 60 + mins) % 1440;
+  const total = (Math.round(fromHour * 60) + mins) % 1440;
   const h = Math.floor(total / 60), m = total % 60;
   return `${h % 12 === 0 ? 12 : h % 12}:${String(m).padStart(2, "0")} ${h < 12 ? "AM" : "PM"}`;
 }
