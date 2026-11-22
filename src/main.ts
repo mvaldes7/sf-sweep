@@ -13,7 +13,7 @@ import holidaysJson from "./data/holidays.json";
 import { decodeRule, searchStreets, type SideRecord, type SweepIndex } from "./lib/data";
 import {
   HolidayTable, clockAt, ruleActiveAt, dayLabel, hourLabel, nextSweep, sfParts, statusFromClock, sweptOnDate,
-  weekOfMonth, weeksLabel, type Holiday, type Rule, type Status,
+  mergeRuleWeeks, weekOfMonth, weeksLabel, type Holiday, type Rule, type Status,
 } from "./lib/schedule";
 import { buildIcs } from "./lib/ics";
 import { drawStatusIcons } from "./icons";
@@ -273,8 +273,9 @@ function correctedNote(c: SideRecord["corrected"]): string {
 }
 
 function signHtml(rules: Rule[]): string {
-  if (!rules.length) return `<div class="sign"><div class="sign-h">NO SCHEDULE</div><div class="sign-sub">No sweeping data for this side</div></div>`;
-  return sortByWeekday(rules, (r) => r).map((r) => `<div class="sign" role="img" aria-label="No parking, street cleaning ${hourLabel(r.from)} to ${hourLabel(r.to)} ${dayLabel(r.day)}">
+  const signs = mergeRuleWeeks(rules);
+  if (!signs.length) return `<div class="sign"><div class="sign-h">NO SCHEDULE</div><div class="sign-sub">No sweeping data for this side</div></div>`;
+  return sortByWeekday(signs, (r) => r).map((r) => `<div class="sign" role="img" aria-label="No parking, street cleaning ${hourLabel(r.from)} to ${hourLabel(r.to)} ${dayLabel(r.day)}">
     <div class="sign-h">NO PARKING</div>
     <div class="sign-b"><div class="sign-sub">STREET CLEANING</div>
     <div class="sign-time">${hourLabel(r.from)} TO ${hourLabel(r.to)}</div>
@@ -458,7 +459,7 @@ function renderCar() {
       <div class="moveby ${risk.level}"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
       <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
       ${s.corrected ? correctedNote(s.corrected) : ""}
-    </div><div class="car-sign">${signHtml(n ? rules.filter((r) => ruleActiveAt(r, n.start, hol)).slice(0, 1) : rules.slice(0, 1))}</div></div>
+    </div><div class="car-sign">${signHtml(n ? mergeRuleWeeks(rules).filter(r => ruleActiveAt(r, n.start, hol)).slice(0, 1) : mergeRuleWeeks(rules).slice(0, 1))}</div></div>
     <div class="row">
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
       <a class="pill" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat},${car.lng}" target="_blank" rel="noopener">Directions</a>

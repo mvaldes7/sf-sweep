@@ -242,13 +242,21 @@ export function clockAt(t: Date | number): Clock {
   };
 }
 
-/** Real minutes until this rule's next start after t, if that start is today or tomorrow. */
+/**
+ * Real minutes until this rule's next start after t, if that start is today or tomorrow.
+ * Returns null when there is no such start, or when the window has no duration
+ * (e.g. a Sunday 2-3 AM rule on the spring-forward night, when 2 AM is skipped).
+ */
 function minsUntilStart(rule: Rule, t: number, p: LocalParts, hol: HolidayTable): number | null {
   const from = minutesFromHours(rule.from);
   const today = ruleAppliesOnDate(rule, p, hol) && from > minutesOf(p);
   const startYmd = today ? p.ymd : addYmd(p.ymd, 1);
   if (!today && !ruleAppliesOnDate(rule, partsForYmd(startYmd), hol)) return null;
-  return (sfAt(startYmd, from) - t) / MIN;
+  const start = sfAt(startYmd, from);
+  const endAt = windowEndYmd(startYmd, rule);
+  const end = sfAt(endAt.ymd, endAt.minutes);
+  if (end <= start) return null;
+  return (start - t) / MIN;
 }
 
 export function statusFromClock(rules: Rule[], c: Clock, hol: HolidayTable): Status {
@@ -279,6 +287,28 @@ export function nextSweep(
 export function sweptOnDate(rules: Rule[], t: Date | number | LocalParts, hol: HolidayTable): boolean {
   const p = typeof t === "object" && "ymd" in t ? t : sfParts(t);
   return rules.some((r) => ruleAppliesOnDate(r, p, hol));
+}
+
+/**
+ * Combine rules that share a weekday and time window, unioning their weeks of month.
+ * DataSF often splits "every week" into two rows (1st/3rd/5th and 2nd/4th/5th); the merged
+ * weeks then cover all five and `weeksLabel` returns "EVERY WEEK".
+ */
+export function mergeRuleWeeks(rules: Rule[]): Rule[] {
+  const out: Rule[] = [];
+  const idx = new Map<string, number>();
+  for (const r of rules) {
+    const key = `${r.day}|${r.from}|${r.to}|${r.holidays ? 1 : 0}`;
+    const i = idx.get(key);
+    if (i === undefined) {
+      idx.set(key, out.length);
+      out.push({ ...r, weeks: [r.weeks[0], r.weeks[1], r.weeks[2], r.weeks[3], r.weeks[4]] });
+    } else {
+      const w = out[i].weeks;
+      out[i].weeks = [w[0] || r.weeks[0], w[1] || r.weeks[1], w[2] || r.weeks[2], w[3] || r.weeks[3], w[4] || r.weeks[4]];
+    }
+  }
+  return out;
 }
 
 const ORD = ["1st", "2nd", "3rd", "4th", "5th"];
