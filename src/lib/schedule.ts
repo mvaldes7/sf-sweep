@@ -20,8 +20,10 @@ export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0 = Sunday
 export interface Rule {
   /** 0-6 (Sun-Sat) or "H" for rows that apply on holidays only */
   day: Weekday | "H";
-  from: number; // hour 0-23
-  to: number; // hour 1-24, exclusive
+  /** Window start, hours past midnight. May be fractional (7.5 = 7:30). */
+  from: number; // 0-23.5
+  /** Window end, hours past midnight, exclusive. May be fractional; 0 means midnight (24:00). */
+  to: number; // 0-24
   weeks: [boolean, boolean, boolean, boolean, boolean];
   holidays: boolean; // true = swept on holidays too
 }
@@ -70,22 +72,33 @@ export class HolidayTable {
   get(ymd: string): Holiday | undefined { return this.byDate.get(ymd); }
 }
 
+/** Hours (possibly fractional) to whole minutes past midnight. */
+export function minutesFromHours(h: number): number {
+  return Math.round(h * 60);
+}
+export function minutesOf(p: LocalParts): number {
+  return p.h * 60 + p.min;
+}
 /** A window like 22-2 crosses midnight: it starts on the scheduled date and ends on the next day. */
 export function crossesMidnight(rule: Rule): boolean {
-  return rule.to > 0 && rule.to < rule.from;
+  const to = minutesFromHours(rule.to);
+  return to > 0 && to < minutesFromHours(rule.from);
 }
-/** Hour falls in the part of the window that belongs to the scheduled (start) date. */
-function inWindow(rule: Rule, h: number): boolean {
-  const to = rule.to === 0 || crossesMidnight(rule) ? 24 : rule.to;
-  return h >= rule.from && h < to;
+/** Minute-of-day falls in the part of the window that belongs to the scheduled (start) date. */
+function inWindow(rule: Rule, min: number): boolean {
+  const from = minutesFromHours(rule.from);
+  const toRaw = minutesFromHours(rule.to);
+  const to = toRaw === 0 || crossesMidnight(rule) ? 1440 : toRaw;
+  return min >= from && min < to;
 }
-/** Hour falls in the after-midnight tail of a crossing window (belongs to the previous date). */
-function inTail(rule: Rule, h: number): boolean {
-  return crossesMidnight(rule) && h < rule.to;
+/** Minute-of-day falls in the after-midnight tail of a crossing window (belongs to the previous date). */
+function inTail(rule: Rule, min: number): boolean {
+  return crossesMidnight(rule) && min < minutesFromHours(rule.to);
 }
 function partsActive(rule: Rule, p: LocalParts, prev: () => LocalParts, hol: HolidayTable): boolean {
-  if (inWindow(rule, p.h) && ruleAppliesOnDate(rule, p, hol)) return true;
-  return inTail(rule, p.h) && ruleAppliesOnDate(rule, prev(), hol);
+  const m = minutesOf(p);
+  if (inWindow(rule, m) && ruleAppliesOnDate(rule, p, hol)) return true;
+  return inTail(rule, m) && ruleAppliesOnDate(rule, prev(), hol);
 }
 /** Local parts of a time on the previous local date (one minute before local midnight). */
 function prevDayParts(ms: number, p: LocalParts): LocalParts {
@@ -99,7 +112,7 @@ export function ruleAppliesOnDate(rule: Rule, p: LocalParts, hol: HolidayTable):
   if (rule.day !== p.dow) return false;
   if (!rule.weeks[weekOfMonth(p.d) - 1]) return false;
   if (holiday && !rule.holidays) {
-    const nightly = rule.from < 6;
+    const nightly = minutesFromHours(rule.from) < 6 * 60;
     if (!nightly) return false;
     if (holiday.nightlyNotEnforced) return false;
   }
@@ -123,26 +136,105 @@ function nextHourBoundary(t: number): number {
   return t - (p.min * MIN) - (t % MIN) + HOUR;
 }
 
+/** Local parts for the next local calendar date (midnight or just after). */
+function nextDayParts(ms: number, p: LocalParts): LocalParts {
+  return sfParts(ms + (1440 - minutesOf(p)) * MIN);
+}
+
+function addYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+/** Epoch ms for a Pacific wall-clock time on a local YYYY-MM-DD date (`minutes` may be 1440 for midnight at the end of the day). */
+export function sfAt(ymd: string, minutes: number): number {
+  if (minutes >= 1440) return sfAt(addYmd(ymd, Math.floor(minutes / 1440)), minutes % 1440);
+  const [y, m, d] = ymd.split("-").map(Number);
+  let t = Date.UTC(y, m - 1, d, 8, 0, 0) + minutes * MIN; // PST guess
+  for (let i = 0; i < 8; i++) {
+    const p = sfParts(t);
+    const got = minutesOf(p);
+    const dayDelta = (Date.UTC(y, m - 1, d) - Date.UTC(p.y, p.m - 1, p.d)) / 86_400_000;
+    if (dayDelta === 0 && got === minutes) return t;
+    t += (dayDelta * 1440 + (minutes - got)) * MIN;
+  }
+  return t;
+}
+
+function partsForYmd(ymd: string): LocalParts {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay() as Weekday;
+  return { y, m, d, dow, h: 12, min: 0, ymd };
+}
+
+function windowEndYmd(ymd: string, rule: Rule): { ymd: string; minutes: number } {
+  const toRaw = minutesFromHours(rule.to);
+  if (toRaw === 0 || crossesMidnight(rule)) {
+    return crossesMidnight(rule) ? { ymd: addYmd(ymd, 1), minutes: toRaw } : { ymd: addYmd(ymd, 1), minutes: 0 };
+  }
+  return { ymd, minutes: toRaw };
+}
+
+function intervalsInRange(rules: Rule[], fromYmd: string, days: number, hol: HolidayTable): { start: number; end: number }[] {
+  const raw: { start: number; end: number }[] = [];
+  for (let i = 0; i < days; i++) {
+    const ymd = addYmd(fromYmd, i);
+    const p = partsForYmd(ymd);
+    for (const r of rules) {
+      if (!ruleAppliesOnDate(r, p, hol)) continue;
+      const start = sfAt(ymd, minutesFromHours(r.from));
+      const endAt = windowEndYmd(ymd, r);
+      raw.push({ start, end: sfAt(endAt.ymd, endAt.minutes) });
+    }
+  }
+  raw.sort((a, b) => a.start - b.start || a.end - b.end);
+  const merged: { start: number; end: number }[] = [];
+  for (const iv of raw) {
+    const last = merged[merged.length - 1];
+    if (last && iv.start <= last.end) last.end = Math.max(last.end, iv.end);
+    else merged.push({ ...iv });
+  }
+  return merged;
+}
+
 /**
  * Status at time t: "now" if sweeping is in effect, "soon" if it starts within the next
- * 60 minutes (inclusive of exactly 60), otherwise "clear". Windows start on the hour, so
- * checking the next top-of-hour (always within 60 min) is sufficient.
+ * 60 minutes (inclusive of exactly 60), otherwise "clear". Windows may start or end on
+ * the half hour, so this uses minute precision rather than the next top-of-hour.
  */
 export function statusAt(rules: Rule[], t: Date | number, hol: HolidayTable): Status {
   return statusFromClock(rules, clockAt(t), hol);
 }
 
-/** Precomputed local parts for a time t, so many sides can be evaluated with one Intl call. */
-export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts }
+/** Precomputed local parts for a time t, so many sides can be evaluated with few Intl calls. */
+export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts; tomorrow: LocalParts }
 export function clockAt(t: Date | number): Clock {
   const ms = typeof t === "number" ? t : t.getTime();
   const nb = nextHourBoundary(ms);
   const now = sfParts(ms), next = sfParts(nb);
-  return { now, next, minsToNext: (nb - ms) / MIN, nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next) };
+  return {
+    now, next, minsToNext: (nb - ms) / MIN,
+    nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next),
+    tomorrow: nextDayParts(ms, now),
+  };
 }
+
+/** Minutes until this rule's next start after p, if that start is today or tomorrow. */
+function minsUntilStart(rule: Rule, p: LocalParts, tomorrow: LocalParts, hol: HolidayTable): number | null {
+  const from = minutesFromHours(rule.from);
+  const m = minutesOf(p);
+  if (ruleAppliesOnDate(rule, p, hol) && from > m) return from - m;
+  if (ruleAppliesOnDate(rule, tomorrow, hol)) return 1440 - m + from;
+  return null;
+}
+
 export function statusFromClock(rules: Rule[], c: Clock, hol: HolidayTable): Status {
   if (rules.some((r) => partsActive(r, c.now, () => c.nowPrev, hol))) return "now";
-  if (c.minsToNext <= AMBER_WINDOW_MIN && rules.some((r) => partsActive(r, c.next, () => c.nextPrev, hol))) return "soon";
+  for (const r of rules) {
+    const d = minsUntilStart(r, c.now, c.tomorrow, hol);
+    if (d !== null && d > 0 && d <= AMBER_WINDOW_MIN) return "soon";
+  }
   return "clear";
 }
 
@@ -151,15 +243,12 @@ export function nextSweep(
   rules: Rule[], t: Date | number, hol: HolidayTable, maxDays = 70,
 ): { start: number; end: number } | null {
   const ms = typeof t === "number" ? t : t.getTime();
-  let cur = activeAt(rules, ms, hol) ? ms : nextHourBoundary(ms);
-  const limit = ms + maxDays * 24 * HOUR;
-  while (cur < limit) {
-    if (activeAt(rules, cur, hol)) {
-      let end = nextHourBoundary(cur);
-      while (activeAt(rules, end, hol) && end < limit) end += HOUR;
-      return { start: cur, end };
-    }
-    cur = nextHourBoundary(cur);
+  const ymd = sfParts(ms).ymd;
+  // Include the previous local day so a midnight-crossing tail already in progress is found.
+  const intervals = intervalsInRange(rules, addYmd(ymd, -1), maxDays + 2, hol);
+  for (const iv of intervals) {
+    if (iv.end <= ms) continue;
+    return { start: Math.max(iv.start, ms), end: iv.end };
   }
   return null;
 }
@@ -179,11 +268,14 @@ export function weeksLabel(weeks: boolean[]): string {
   return `${on.length ? on.join(", ") + " & " : ""}${last} OF MONTH`;
 }
 
+/** "7 AM" or "7:30 AM". `h` is hours past midnight and may be fractional; 0 and 24 are "12 AM". */
 export function hourLabel(h: number): string {
-  const hh = h % 24;
-  if (hh === 0) return "12 AM";
-  if (hh === 12) return "12 PM";
-  return hh < 12 ? `${hh} AM` : `${hh - 12} PM`;
+  const total = minutesFromHours(h);
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  const base = hh % 12 === 0 ? 12 : hh % 12;
+  const ap = hh < 12 ? "AM" : "PM";
+  return mm === 0 ? `${base} ${ap}` : `${base}:${String(mm).padStart(2, "0")} ${ap}`;
 }
 
 export const DAY_NAMES = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];

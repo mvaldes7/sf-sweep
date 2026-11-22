@@ -175,3 +175,46 @@ describe("overnight windows crossing midnight", () => {
     expect(activeAt([wk1], pst("2026-11-15T00:30:00"), none)).toBe(false);
   });
 });
+
+describe("half-hour windows", () => {
+  // Posted sign on 30th Ave west: Friday 7:00-7:30.
+  const r = rule({ day: 5, from: 7, to: 7.5 });
+  it("hourLabel prints :30 and drops :00", () => {
+    expect(hourLabel(7)).toBe("7 AM");
+    expect(hourLabel(7.5)).toBe("7:30 AM");
+    expect(hourLabel(19.5)).toBe("7:30 PM");
+    expect(hourLabel(24)).toBe("12 AM");
+  });
+  it("is now inside 7:00-7:30 and clear at the exclusive end", () => {
+    expect(statusAt([r], pst("2026-11-13T07:00:00"), none)).toBe("now");
+    expect(statusAt([r], pst("2026-11-13T07:29:00"), none)).toBe("now");
+    expect(statusAt([r], pst("2026-11-13T07:30:00"), none)).toBe("clear");
+    expect(activeAt([r], pst("2026-11-13T07:30:00"), none)).toBe(false);
+  });
+  it("is soon for 60 minutes before a 7:00 start, not earlier", () => {
+    expect(statusAt([r], pst("2026-11-13T06:00:00"), none)).toBe("soon");
+    expect(statusAt([r], pst("2026-11-13T06:30:00"), none)).toBe("soon");
+    expect(statusAt([r], pst("2026-11-13T05:59:00"), none)).toBe("clear");
+  });
+  it("nextSweep starts at 7:00 and ends at 7:30", () => {
+    const n = nextSweep([r], pst("2026-11-13T06:00:00"), none)!;
+    expect(n.start).toBe(pst("2026-11-13T07:00:00").getTime());
+    expect(n.end).toBe(pst("2026-11-13T07:30:00").getTime());
+  });
+  it("round-trips a 7:30 compact rule", () => {
+    expect(encodeRule(r)).toEqual([5, 7, 7.5, 31, 0]);
+    expect(decodeRule([5, 7, 7.5, 31, 0])).toEqual(r);
+  });
+  it("7:30-8:00 is soon at 6:30 and now at 7:30, and is not missed between hours", () => {
+    const late = rule({ day: 5, from: 7.5, to: 8 });
+    expect(statusAt([late], pst("2026-11-13T06:29:00"), none)).toBe("clear");
+    expect(statusAt([late], pst("2026-11-13T06:30:00"), none)).toBe("soon");
+    expect(statusAt([late], pst("2026-11-13T07:15:00"), none)).toBe("soon");
+    expect(statusAt([late], pst("2026-11-13T07:30:00"), none)).toBe("now");
+    expect(statusAt([late], pst("2026-11-13T07:59:00"), none)).toBe("now");
+    expect(statusAt([late], pst("2026-11-13T08:00:00"), none)).toBe("clear");
+    const n = nextSweep([late], pst("2026-11-13T07:00:00"), none)!;
+    expect(n.start).toBe(pst("2026-11-13T07:30:00").getTime());
+    expect(n.end).toBe(pst("2026-11-13T08:00:00").getTime());
+  });
+});

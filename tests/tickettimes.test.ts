@@ -91,3 +91,16 @@ describe("sortByWeekday", () => {
     expect(sortByWeekday(rs, (r) => r).map((r) => `${r.day}@${r.from}`)).toEqual(["1@6", "1@9", "4@6", "6@6", "0@6", "H@6"]);
   });
 });
+
+describe("half-hour ticket windows", () => {
+  const r = [rule(5, 7, 7.5)];
+  it("matches a ticket at 7:15 and not at the 7:30 exclusive end", () => {
+    expect(matchWindows(r, parseLocal("2026-11-13T07:15:00")!, hol)).toEqual([{ rule: 0, mins: 15 }]);
+    expect(matchWindows(r, parseLocal("2026-11-13T07:00:00")!, hol)).toEqual([{ rule: 0, mins: 0 }]);
+    expect(matchWindows(r, parseLocal("2026-11-13T07:30:00")!, hol)).toEqual([]);
+  });
+  it("clockFor starts from a fractional hour", () => {
+    expect(clockFor(7.5, 0)).toBe("7:30 AM");
+    expect(clockFor(7, 30)).toBe("7:30 AM");
+  });
+});

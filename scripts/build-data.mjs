@@ -16,6 +16,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { spawnSync } from "node:child_process";
 import { join } from "node:path";
 import { offsetLine, midpoint } from "./offset.mjs";
+import { applyCorrections, loadCorrections } from "./corrections.mjs";
 
 const SODA = "https://data.sf.gov/resource/yhqp-riqs.json";
 const OFFSET_M = 4;
@@ -82,6 +83,7 @@ export function buildSides(rows) {
 async function main() {
   const rows = await fetchRows();
   const { sides, features, skipped } = buildSides(rows);
+  applyCorrections(sides, loadCorrections());
   await mkdir(outDir, { recursive: true });
   const generated = new Date().toISOString();
   await writeFile(join(outDir, "sweep-index.json"), JSON.stringify({ generated, source: "DataSF Street Sweeping Schedule (yhqp-riqs), https://data.sf.gov/d/yhqp-riqs", sides }));
