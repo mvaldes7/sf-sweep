@@ -123,6 +123,30 @@ function nextHourBoundary(t: number): number {
   return t - (p.min * MIN) - (t % MIN) + HOUR;
 }
 
+function addYmd(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + days));
+  return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
+}
+
+function partsForYmd(ymd: string): LocalParts {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay() as Weekday;
+  return { y, m, d, dow, h: 12, min: 0, ymd };
+}
+
+/** Local hour `hour` on ymd after t, or the first instant after a skipped spring-forward hour. */
+function startInstant(ymd: string, hour: number, t: number): number {
+  let cur = nextHourBoundary(t);
+  const limit = t + 48 * HOUR;
+  while (cur <= limit) {
+    const p = sfParts(cur);
+    if (p.ymd > ymd || (p.ymd === ymd && p.h >= hour)) return cur;
+    cur = nextHourBoundary(cur);
+  }
+  return cur;
+}
+
 /**
  * Status at time t: "now" if sweeping is in effect, "soon" if it starts within the next
  * 60 minutes (inclusive of exactly 60), otherwise "clear". Windows start on the hour, so
@@ -133,16 +157,40 @@ export function statusAt(rules: Rule[], t: Date | number, hol: HolidayTable): St
 }
 
 /** Precomputed local parts for a time t, so many sides can be evaluated with one Intl call. */
-export interface Clock { now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts }
+export interface Clock { t: number; now: LocalParts; next: LocalParts; minsToNext: number; nowPrev: LocalParts; nextPrev: LocalParts }
 export function clockAt(t: Date | number): Clock {
   const ms = typeof t === "number" ? t : t.getTime();
   const nb = nextHourBoundary(ms);
   const now = sfParts(ms), next = sfParts(nb);
-  return { now, next, minsToNext: (nb - ms) / MIN, nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next) };
+  return { t: ms, now, next, minsToNext: (nb - ms) / MIN, nowPrev: prevDayParts(ms, now), nextPrev: prevDayParts(nb, next) };
 }
+
+/**
+ * Minutes until this rule's next start after t, if that start is today or tomorrow.
+ * Returns null when there is no such start, or when the window has no duration
+ * (e.g. a Sunday 2-3 AM rule on the spring-forward night, when 2 AM is skipped).
+ *
+ * Start/end math here is hour-based. If it is later replaced with minute-precision
+ * instants, keep returning null when the window has no duration (`end <= start`).
+ */
+function minsUntilStart(rule: Rule, t: number, p: LocalParts, hol: HolidayTable): number | null {
+  const today = ruleAppliesOnDate(rule, p, hol) && rule.from > p.h;
+  const startYmd = today ? p.ymd : addYmd(p.ymd, 1);
+  if (!today && !ruleAppliesOnDate(rule, partsForYmd(startYmd), hol)) return null;
+  const start = startInstant(startYmd, rule.from, t);
+  if (!crossesMidnight(rule) && rule.to !== 0) {
+    const sp = sfParts(start);
+    if (sp.ymd === startYmd && sp.h >= rule.to) return null;
+  }
+  return (start - t) / MIN;
+}
+
 export function statusFromClock(rules: Rule[], c: Clock, hol: HolidayTable): Status {
   if (rules.some((r) => partsActive(r, c.now, () => c.nowPrev, hol))) return "now";
-  if (c.minsToNext <= AMBER_WINDOW_MIN && rules.some((r) => partsActive(r, c.next, () => c.nextPrev, hol))) return "soon";
+  for (const r of rules) {
+    const d = minsUntilStart(r, c.t, c.now, hol);
+    if (d !== null && d > 0 && d <= AMBER_WINDOW_MIN) return "soon";
+  }
   return "clear";
 }
 

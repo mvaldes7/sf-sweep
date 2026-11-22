@@ -450,7 +450,7 @@ function renderCar() {
       ${n ? `<div class="count"><span>${d}<small>day</small></span><span>${h}<small>hrs</small></span><span>${m}<small>min</small></span></div>
       <div class="moveby ${risk.level}"><div class="eyebrow">MOVE BY</div><div>${fullFmt.format(n.start)}</div></div>` : `<div class="muted">No sweeping scheduled in the next 10 weeks</div>`}
       <div class="muted">${esc(s.street)}, ${esc(sideLabel(s.blockside, s.side))} - ${esc(s.limits)}</div>
-    </div><div class="car-sign">${signHtml(n ? rules.filter((r) => ruleActiveAt(r, n.start, hol)) : mergeRuleWeeks(rules).slice(0, 1))}</div></div>
+    </div><div class="car-sign">${signHtml(n ? mergeRuleWeeks(rules).filter(r => ruleActiveAt(r, n.start, hol)).slice(0, 1) : mergeRuleWeeks(rules).slice(0, 1))}</div></div>
     <div class="row">
       ${n ? `<button class="pill" id="car-ics">Add .ics reminder</button>` : ""}
       <a class="pill" href="https://www.google.com/maps/dir/?api=1&destination=${car.lat},${car.lng}" target="_blank" rel="noopener">Directions</a>
