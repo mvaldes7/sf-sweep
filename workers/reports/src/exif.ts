@@ -1,5 +1,6 @@
 /** Server-side EXIF / metadata stripping for JPEG, PNG and WebP. Pure; no I/O. */
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
+export const MAX_SEGMENTS_BEFORE_SOS = 1000;
 export type PhotoKind = "jpeg" | "png" | "webp";
 
 export const HEIC_PHOTO_ERROR = "This photo is in HEIC format. Please upload a JPEG, PNG, or WebP. On iPhone, the form asks for JPEG so the photo is converted on upload.";
@@ -58,6 +59,8 @@ function stripJpeg(buf: Uint8Array): Uint8Array {
   const ranges: [number, number][] = [[0, 2]];
   let i = 2;
   let done = false;
+  let segmentsBeforeSos = 0;
+  let seenSos = false;
   while (i < buf.length && !done) {
     if (buf[i] !== 0xff) throw new Error("invalid jpeg");
     let j = i;
@@ -71,6 +74,10 @@ function stripJpeg(buf: Uint8Array): Uint8Array {
       break;
     }
     if (marker === 0xd8) throw new Error("invalid jpeg");
+    if (!seenSos && marker !== 0xda) {
+      segmentsBeforeSos++;
+      if (segmentsBeforeSos > MAX_SEGMENTS_BEFORE_SOS) throw new Error("invalid jpeg");
+    }
     if (marker >= 0xd0 && marker <= 0xd7) {
       ranges.push([start, start + 2]);
       continue;
@@ -79,6 +86,10 @@ function stripJpeg(buf: Uint8Array): Uint8Array {
     const len = u16be(buf, i);
     if (len < 2 || i + len > buf.length) throw new Error("invalid jpeg");
     if (marker === 0xda) {
+      // SOS header length is 6 + 2*Ns, with Ns (components in the scan) in 1..4.
+      const ns = buf[i + 2];
+      if (ns < 1 || ns > 4 || len !== 6 + 2 * ns) throw new Error("invalid jpeg");
+      seenSos = true;
       const headerEnd = i + len;
       ranges.push([start, headerEnd]);
       let k = headerEnd;

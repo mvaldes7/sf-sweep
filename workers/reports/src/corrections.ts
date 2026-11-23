@@ -119,3 +119,23 @@ export function reportedDate(ms: number, timeZone = "America/Los_Angeles"): stri
   const g = (t: string) => parts.find((p) => p.type === t)?.value ?? "";
   return `${g("year")}-${g("month")}-${g("day")}`;
 }
+
+export function rulesFromConfirm(body: Record<string, unknown>, row: Record<string, unknown>): CorrectionRule[] {
+  if (Array.isArray(body.rules)) return body.rules as CorrectionRule[];
+  const daysRaw = body.days ?? row.days;
+  let days: string[] = [];
+  if (Array.isArray(daysRaw)) days = daysRaw.map(String);
+  else if (typeof daysRaw === "string" && daysRaw) {
+    try { days = JSON.parse(daysRaw) as string[]; } catch { days = []; }
+  }
+  const from = normalizeClock(String(body.from ?? row.from_time ?? ""), false);
+  const to = normalizeClock(String(body.to ?? row.to_time ?? ""), true);
+  let weeks = normalizeWeeks(body.weeks);
+  if (!weeks && typeof row.weeks === "string" && row.weeks) {
+    try { weeks = normalizeWeeks(JSON.parse(row.weeks)); } catch { weeks = [1, 2, 3, 4, 5]; }
+  }
+  if (!weeks) weeks = [1, 2, 3, 4, 5];
+  const holidays = body.holidays === true || row.holidays === 1;
+  if (!days.length || !from || !to) return [];
+  return days.map((d) => ({ day: parseDay(d) ?? d, weeks, from, to, holidays }));
+}

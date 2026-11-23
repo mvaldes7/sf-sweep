@@ -1,9 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
-import worker, {
-  cleanupExpiredReports, DAILY_SUBMIT_CAP, PENDING_REPORT_CEILING, PHOTO_TTL_SECONDS,
-  rateLimited, reviewAuthorized, roundCoord, timingSafeEqual, verifyTurnstile, type Env,
-} from "../workers/reports/src/index";
-import { rulesFromConfirm } from "../workers/reports/src/index";
+import worker from "../workers/reports/src/index";
+import type { Env } from "../workers/reports/src/env";
+import { cleanupExpiredReports } from "../workers/reports/src/cleanup";
+import { CLEANUP_BATCH_LIMIT, DAILY_SUBMIT_CAP, PENDING_REPORT_CEILING, PHOTO_TTL_SECONDS, isPendingPhotoExpired, roundCoord } from "../workers/reports/src/limits";
+import { rateLimited, reviewAuthorized, timingSafeEqual, verifyTurnstile } from "../workers/reports/src/http";
+import { rulesFromConfirm } from "../workers/reports/src/corrections";
 import { HEIC_PHOTO_ERROR } from "../workers/reports/src/exif";
 
 function req(path: string, init: RequestInit = {}, ip = "203.0.113.9"): Request {
@@ -87,7 +88,8 @@ describe("rulesFromConfirm", () => {
 function jpegBytes(): Uint8Array {
   const u16be = (n: number) => [(n >> 8) & 0xff, n & 0xff];
   const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
-  const sos = [0xff, 0xda, ...u16be(2), 0x00, 0xff, 0xd9];
+  const sosLen = 8; // 6 + 2*1
+  const sos = [0xff, 0xda, ...u16be(sosLen), 1, 1, 0x00, 0x00, 0x3f, 0x00, 0x00, 0xff, 0xd9];
   return Uint8Array.from([0xff, 0xd8, ...app0, ...sos]);
 }
 
@@ -170,6 +172,58 @@ function heicFile(): File {
   ]);
   return new File([bytes], "sign.heic", { type: "image/heic" });
 }
+
+type ReviewRow = Record<string, unknown> & { id: string; status: string; created_at?: number; reviewed_at?: number; photo_key?: string };
+
+function reviewStore(initial: ReviewRow[]) {
+  const rows = initial.map((r) => ({ ...r }));
+  const sqls: string[] = [];
+  const del = vi.fn(async () => undefined);
+  const getWithMetadata = vi.fn(async () => ({ value: new ArrayBuffer(4), metadata: { contentType: "image/jpeg" } }));
+  const store = {
+    rows,
+    sqls,
+    deleted: 0,
+    explodeCleanup: false,
+    del,
+    getWithMetadata,
+    DB: {} as D1Database,
+    PHOTOS: { put: vi.fn(), delete: del, getWithMetadata } as unknown as KVNamespace,
+  };
+  store.DB = {
+    prepare(sql: string) {
+      sqls.push(sql);
+      const bind = (...args: unknown[]) => ({
+        async all() {
+          return { results: rows.map((r) => ({ ...r })) };
+        },
+        async first() {
+          const id = args[0];
+          return rows.find((r) => r.id === id) ?? null;
+        },
+        async run() {
+          if (store.explodeCleanup) throw new Error("cleanup exploded");
+          if (/DELETE FROM reports WHERE id IN/.test(sql)) {
+            const cutoff = Number(args[0]);
+            const expired = rows.filter((r) =>
+              (r.status === "rejected" || r.status === "confirmed")
+              && Number(r.reviewed_at ?? r.created_at ?? 0) < cutoff,
+            );
+            const take = expired.slice(0, 100);
+            const ids = new Set(take.map((r) => r.id));
+            store.deleted += take.length;
+            for (let i = rows.length - 1; i >= 0; i--) if (ids.has(rows[i].id)) rows.splice(i, 1);
+            return { success: true, meta: { changes: take.length } };
+          }
+          return { success: true, meta: { changes: 0 } };
+        },
+      });
+      return { bind, all: () => bind().all(), first: () => bind().first(), run: () => bind().run() };
+    },
+  } as unknown as D1Database;
+  return store;
+}
+
 
 describe("submit without Turnstile", () => {
   it("accepts a report with no token when TURNSTILE_SECRET is unset", async () => {
@@ -357,18 +411,99 @@ describe("review photo headers and reject delete", () => {
 });
 
 describe("90-day retention cleanup", () => {
-  it("deletes expired rejected or confirmed rows and their photos, with no schema change", async () => {
-    const expired = [
-      { id: "old-rejected", photo_key: "old-rejected" },
-      { id: "old-confirmed", photo_key: "old-confirmed" },
+  it("deletes at most 100 expired rejected or confirmed rows in one D1 statement, without KV deletes", async () => {
+    const expired = Array.from({ length: 150 }, (_, i) => ({
+      id: `old-${i}`,
+      status: i % 2 ? "rejected" : "confirmed",
+      created_at: 1,
+      reviewed_at: 1,
+      photo_key: `old-${i}`,
+    }));
+    const rows = [
+      ...expired,
+      { id: "still-pending", status: "pending", created_at: Date.now(), photo_key: "pending" },
     ];
-    const store = memoryDbAndPhotos({ expired });
+    const store = reviewStore(rows);
     const n = await cleanupExpiredReports(env({ ...store }), Date.now());
-    expect(n).toBe(2);
-    expect(store.del).toHaveBeenCalledWith("old-rejected");
-    expect(store.del).toHaveBeenCalledWith("old-confirmed");
-    expect(store.sqls.some((s) => /DELETE FROM reports WHERE id/.test(s))).toBe(true);
-    expect(store.sqls.some((s) => /status IN \('rejected', 'confirmed'\)/.test(s))).toBe(true);
+    expect(n).toBe(CLEANUP_BATCH_LIMIT);
+    expect(n).toBeLessThanOrEqual(100);
+    expect(store.del).not.toHaveBeenCalled();
+    expect(store.rows.filter((r) => r.status !== "pending")).toHaveLength(50);
+    expect(store.rows.some((r) => r.id === "still-pending")).toBe(true);
+    expect(store.sqls.some((s) => /LIMIT 100/.test(s) && /DELETE FROM reports WHERE id IN/.test(s))).toBe(true);
+    expect(store.sqls.filter((s) => /DELETE FROM reports/.test(s))).toHaveLength(1);
+  });
+
+  it("GET /api/review still returns 200 when more than 100 expired rows exist, and cleanup cannot fail the response", async () => {
+    const expired = Array.from({ length: 150 }, (_, i) => ({
+      id: `old-${i}`,
+      status: "rejected" as const,
+      created_at: 1,
+      reviewed_at: 1,
+      photo_key: `old-${i}`,
+      cnn: "1",
+      side: "R",
+    }));
+    const store = reviewStore(expired);
+    const pending: Promise<unknown>[] = [];
+    const ctx = { waitUntil(p: Promise<unknown>) { pending.push(p); } };
+    const res = await worker.fetch(
+      req("/api/review", { headers: { authorization: "Bearer review-token-test" } }),
+      env({ ...store }),
+      ctx as ExecutionContext,
+    );
+    expect(res.status).toBe(200);
+    const body = await res.json() as { reports: unknown[] };
+    expect(body.reports.length).toBe(150);
+    await Promise.all(pending);
+    expect(store.deleted).toBe(100);
+    expect(store.rows).toHaveLength(50);
+
+    const boom = reviewStore(expired);
+    boom.explodeCleanup = true;
+    const pending2: Promise<unknown>[] = [];
+    const ctx2 = { waitUntil(p: Promise<unknown>) { pending2.push(p); } };
+    const res2 = await worker.fetch(
+      req("/api/review", { headers: { authorization: "Bearer review-token-test" } }),
+      env({ ...boom }),
+      ctx2 as ExecutionContext,
+    );
+    expect(res2.status).toBe(200);
+    await Promise.all(pending2);
+  });
+});
+
+describe("expired pending photos on the review page", () => {
+  const auth = { authorization: "Bearer review-token-test" };
+
+  it("flags pending reports older than 30 days as expired and returns expired instead of a broken photo", async () => {
+    expect(isPendingPhotoExpired("pending", Date.now() - (PHOTO_TTL_SECONDS * 1000 + 1))).toBe(true);
+    expect(isPendingPhotoExpired("pending", Date.now())).toBe(false);
+    expect(isPendingPhotoExpired("confirmed", 1)).toBe(false);
+
+    const oldPending = {
+      id: "22222222-2222-2222-2222-222222222222",
+      status: "pending",
+      created_at: Date.now() - (PHOTO_TTL_SECONDS + 60) * 1000,
+      photo_key: "22222222-2222-2222-2222-222222222222",
+      photo_type: "image/jpeg",
+      cnn: "1642000",
+      side: "R",
+    };
+    const store = reviewStore([oldPending]);
+    const list = await worker.fetch(req("/api/review", { headers: auth }), env({ ...store }), { waitUntil() {} } as unknown as ExecutionContext);
+    expect(list.status).toBe(200);
+    const listed = await list.json() as { reports: { expired: boolean }[] };
+    expect(listed.reports[0].expired).toBe(true);
+
+    const one = await worker.fetch(req(`/api/review/${oldPending.id}`, { headers: auth }), env({ ...store }));
+    expect(one.status).toBe(200);
+    expect(await one.json()).toMatchObject({ report: { expired: true } });
+
+    const photo = await worker.fetch(req(`/api/review/${oldPending.id}/photo`, { headers: auth }), env({ ...store }));
+    expect(photo.status).toBe(410);
+    expect(await photo.json()).toMatchObject({ error: "expired" });
+    expect(store.getWithMetadata).not.toHaveBeenCalled();
   });
 });
 

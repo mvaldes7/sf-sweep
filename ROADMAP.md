@@ -69,8 +69,9 @@ GitHub issues hold the backlog.
 - Follow-up: add a Turnstile bot check to photo reports later (create the widget, set `TURNSTILE_SECRET` and
   `VITE_TURNSTILE_SITE_KEY`). v1 ships without it.
 - Photo-report retention: rejected and confirmed rows are kept 90 days. `cleanupExpiredReports` in the reports
-  Worker deletes older rows and their photos with no schema change. It runs when the review list is loaded, and
-  can be put on a cron when the real Worker is deployed.
+  Worker deletes older rows in batches of 100 (one D1 statement, no KV deletes; photos already expire at 30 days
+  or are removed on reject). Cleanup runs in the background after the review list is built, and can be put on a
+  cron when the real Worker is deployed.
 - Light-theme contrast for `--soon` and `--clear` in `src/style.css`. On the light `--bg` (`#eef0f3`), `--soon`
   (`#a87400`) is about 3.5:1 and `--clear` (`#3f9d68`) is about 3.0:1, short of WCAG AA 4.5:1 for normal text.
 - An optional ruleset on `main` (required checks, no direct pushes). The repo currently has no rulesets and

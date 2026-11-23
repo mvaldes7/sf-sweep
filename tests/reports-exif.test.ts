@@ -1,15 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { detectKind, isHeic, stripExif, HEIC_PHOTO_ERROR, MAX_PHOTO_BYTES } from "../workers/reports/src/exif";
+import { detectKind, isHeic, stripExif, HEIC_PHOTO_ERROR, MAX_PHOTO_BYTES, MAX_SEGMENTS_BEFORE_SOS } from "../workers/reports/src/exif";
 
 function u16be(n: number): number[] { return [(n >> 8) & 0xff, n & 0xff]; }
+
+/** Valid SOS header: length = 6 + 2*Ns, Ns in 1..4. */
+function sosHeader(ns = 1): number[] {
+  const len = 6 + 2 * ns;
+  const comps: number[] = [];
+  for (let i = 0; i < ns; i++) comps.push(i + 1, 0x00);
+  return [0xff, 0xda, ...u16be(len), ns, ...comps, 0x00, 0x3f, 0x00];
+}
+
 
 /** Minimal JPEG: SOI, APP0 JFIF, APP1 EXIF, SOS+payload, EOI. */
 function jpegWithExif(): Uint8Array {
   const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
   const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53]; // "Exif\0\0GPS"
   const app1 = [0xff, 0xe1, ...u16be(2 + exif.length), ...exif];
-  // SOS with a 2-byte length then one scan byte and EOI
-  const sos = [0xff, 0xda, ...u16be(2), 0x00, 0xff, 0xd9];
+  const sos = [...sosHeader(), 0x00, 0xff, 0xd9];
   return Uint8Array.from([0xff, 0xd8, ...app0, ...app1, ...sos]);
 }
 
@@ -135,7 +143,7 @@ describe("stripJpeg trailers and later scans", () => {
     const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
     const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53];
     const app1 = [0xff, 0xe1, ...u16be(2 + exif.length), ...exif];
-    const sos = [0xff, 0xda, ...u16be(2)];
+    const sos = sosHeader();
     const raw = Uint8Array.from([0xff, 0xd8, ...app0, ...sos, 0x11, ...app1, ...sos, 0x22, 0xff, 0xd9]);
     expect(new TextDecoder().decode(raw)).toContain("GPS");
     const { bytes } = stripExif(raw);
@@ -155,13 +163,14 @@ describe("stripJpeg trailers and later scans", () => {
     const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53];
     const app1 = [0xff, 0xe1, ...u16be(2 + exif.length), ...exif];
     const scan = new Uint8Array(2_300_000).fill(0x5a);
-    const raw = new Uint8Array(2 + app0.length + app1.length + 4 + scan.length + 2);
+    const sos = sosHeader();
+    const raw = new Uint8Array(2 + app0.length + app1.length + sos.length + scan.length + 2);
     raw[0] = 0xff; raw[1] = 0xd8;
     raw.set(app0, 2);
     raw.set(app1, 2 + app0.length);
     const sosAt = 2 + app0.length + app1.length;
-    raw.set([0xff, 0xda, 0x00, 0x02], sosAt);
-    raw.set(scan, sosAt + 4);
+    raw.set(sos, sosAt);
+    raw.set(scan, sosAt + sos.length);
     raw[raw.length - 2] = 0xff;
     raw[raw.length - 1] = 0xd9;
     stripExif(jpegWithExif()); // warmup
@@ -181,5 +190,32 @@ describe("HEIC uploads", () => {
     expect(isHeic(raw)).toBe(true);
     expect(detectKind(raw)).toBeNull();
     expect(() => stripExif(raw)).toThrow(HEIC_PHOTO_ERROR);
+  });
+});
+
+describe("SOS header and segment limits", () => {
+  const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+
+  it("accepts a SOS header of length 6+2*Ns with Ns from 1 to 4, and rejects anything else", () => {
+    const wrap = (sos: number[]) => Uint8Array.from([0xff, 0xd8, ...app0, ...sos, 0x00, 0xff, 0xd9]);
+    for (const ns of [1, 2, 3, 4]) {
+      expect(() => stripExif(wrap(sosHeader(ns)))).not.toThrow();
+    }
+    const badLen = [0xff, 0xda, ...u16be(2), 0x00, 0xff, 0xd9];
+    expect(() => stripExif(Uint8Array.from([0xff, 0xd8, ...app0, ...badLen]))).toThrow(/invalid jpeg/);
+    const ns0 = [0xff, 0xda, ...u16be(6), 0x00, 0x00, 0x3f, 0x00, 0x00, 0xff, 0xd9];
+    expect(() => stripExif(Uint8Array.from([0xff, 0xd8, ...app0, ...ns0]))).toThrow(/invalid jpeg/);
+    const ns5 = [0xff, 0xda, ...u16be(16), 5, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 0x00, 0x3f, 0x00, 0x00, 0xff, 0xd9];
+    expect(() => stripExif(Uint8Array.from([0xff, 0xd8, ...app0, ...ns5]))).toThrow(/invalid jpeg/);
+  });
+
+  it("rejects a JPEG with more than 1,000 segments before SOS", () => {
+    const com = [0xff, 0xfe, ...u16be(2)];
+    const okSegs = Array.from({ length: MAX_SEGMENTS_BEFORE_SOS }, () => com).flat();
+    const ok = Uint8Array.from([0xff, 0xd8, ...okSegs, ...sosHeader(), 0x00, 0xff, 0xd9]);
+    expect(() => stripExif(ok)).not.toThrow();
+    const tooMany = Array.from({ length: MAX_SEGMENTS_BEFORE_SOS + 1 }, () => com).flat();
+    const bad = Uint8Array.from([0xff, 0xd8, ...tooMany, ...sosHeader(), 0x00, 0xff, 0xd9]);
+    expect(() => stripExif(bad)).toThrow(/invalid jpeg/);
   });
 });
