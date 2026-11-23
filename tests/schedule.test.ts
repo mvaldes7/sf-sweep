@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import holidaysJson from "../src/data/holidays.json";
 import {
-  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, nextSweep, parseWeekday, sfAt, sfParts,
+  HolidayTable, type Holiday, type Rule, activeAt, hourLabel, mergeRuleWeeks, nextSweep, parseWeekday, ruleActiveAt, sfAt, sfParts,
   statusAt, sweptOnDate, weekOfMonth, weeksLabel,
 } from "../src/lib/schedule";
 import { decodeRule, encodeRule, searchStreets, type SideRecord } from "../src/lib/data";
@@ -173,6 +173,69 @@ describe("overnight windows crossing midnight", () => {
     const wk1 = rule({ day: 6, from: 23, to: 1, weeks: [true, false, false, false, false] }); // 1st Sat
     expect(activeAt([wk1], pst("2026-11-08T00:30:00"), none)).toBe(true); // Sun Nov 8 tail of Sat Nov 7
     expect(activeAt([wk1], pst("2026-11-15T00:30:00"), none)).toBe(false);
+  });
+});
+
+describe("mergeRuleWeeks", () => {
+  const w = (weeks: Rule["weeks"], extra: Partial<Rule> = {}): Rule => rule({ weeks, ...extra });
+  it("unions weeks of the same weekday and window, and labels EVERY WEEK when all five are covered", () => {
+    const a = w([true, false, true, false, true]); // 1st/3rd/5th Friday 9-11
+    const b = w([false, true, false, true, true]); // 2nd/4th/5th Friday 9-11
+    const merged = mergeRuleWeeks([a, b]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].weeks).toEqual([true, true, true, true, true]);
+    expect(weeksLabel(merged[0].weeks)).toBe("EVERY WEEK");
+  });
+  it("does not merge different days or different windows", () => {
+    const fri = w(ALL);
+    const thu = w(ALL, { day: 4 });
+    const later = w(ALL, { from: 10, to: 12 });
+    expect(mergeRuleWeeks([fri, thu, later])).toHaveLength(3);
+  });
+  it("keeps holidays flags distinct and is idempotent", () => {
+    const skip = w([true, false, true, false, false]);
+    const also = w([false, true, false, true, false], { holidays: true });
+    expect(mergeRuleWeeks([skip, also])).toHaveLength(2);
+    const once = mergeRuleWeeks([skip, w([false, true, false, true, false])]);
+    expect(weeksLabel(once[0].weeks)).toBe("1st, 2nd, 3rd & 4th OF MONTH");
+    expect(mergeRuleWeeks(once)).toEqual(once);
+  });
+});
+
+describe("car card sign", () => {
+  it("a week-3 Friday with complementary rows reads EVERY WEEK", () => {
+    const a = rule({ weeks: [true, false, true, false, true] }); // 1st/3rd/5th Friday 9-11
+    const b = rule({ weeks: [false, true, false, true, true] }); // 2nd/4th/5th Friday 9-11
+    const rules = [a, b];
+    // Friday Nov 20 2026 is week 3; nextSweep lands on that 9 AM window.
+    const n = nextSweep(rules, pst("2026-11-20T08:00:00"), none)!;
+    expect(sfParts(n.start)).toMatchObject({ ymd: "2026-11-20", dow: 5, h: 9 });
+    expect(weekOfMonth(sfParts(n.start).d)).toBe(3);
+    // Same selection as src/main.ts renderCar (merge, then filter to the next window, then slice).
+    const shown = n ? mergeRuleWeeks(rules).filter((r) => ruleActiveAt(r, n.start, none)).slice(0, 1) : mergeRuleWeeks(rules).slice(0, 1);
+    expect(shown).toHaveLength(1);
+    expect(weeksLabel(shown[0].weeks)).toBe("EVERY WEEK");
+  });
+
+  it("renderCar merges week rows before filtering the car sign to the next sweep", async () => {
+    const { readFileSync } = await import("node:fs");
+    const src = readFileSync(new URL("../src/main.ts", import.meta.url), "utf8");
+    expect(src).toMatch(
+      /signHtml\(n \? mergeRuleWeeks\(rules\)\.filter\(r => ruleActiveAt\(r, n\.start, hol\)\)\.slice\(0,\s*1\) : mergeRuleWeeks\(rules\)\.slice\(0,\s*1\)\)/,
+    );
+  });
+});
+
+describe("zero-length spring-forward windows", () => {
+  it("a Sun 2-3 AM rule does not show soon on the spring-forward night", () => {
+    const sun23 = rule({ day: 0, from: 2, to: 3 });
+    // 2026-03-08 skips 2 AM, so that window has no duration.
+    expect(statusAt([sun23], pst("2026-03-08T01:00:00"), none)).toBe("clear");
+    expect(statusAt([sun23], pst("2026-03-08T01:30:00"), none)).toBe("clear");
+    // A 3-4 AM window that night still starts in 60 real minutes at 1:00 PST.
+    const sun34 = rule({ day: 0, from: 3, to: 4 });
+    expect(statusAt([sun34], pst("2026-03-08T01:00:00"), none)).toBe("soon");
+    expect(statusAt([sun34], pst("2026-03-08T01:30:00"), none)).toBe("soon");
   });
 });
 
