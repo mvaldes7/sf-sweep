@@ -20,10 +20,10 @@ export interface SubmitFields {
   weeks?: number[];
   holidays?: boolean;
   note?: string;
-  turnstile: string;
+  turnstile?: string;
 }
 
-export function validateSubmit(b: Partial<SubmitFields>): string | null {
+export function validateSubmit(b: Partial<SubmitFields>, opts: { requireTurnstile?: boolean } = {}): string | null {
   if (typeof b.cnn !== "string" || !/^\d{1,12}$/.test(b.cnn)) return "cnn is required";
   if (b.side !== "L" && b.side !== "R") return "side must be L or R";
   if (typeof b.lat !== "number" || !Number.isFinite(b.lat) || b.lat < SF_LAT.min || b.lat > SF_LAT.max) return "location outside San Francisco";
@@ -32,7 +32,9 @@ export function validateSubmit(b: Partial<SubmitFields>): string | null {
   if (b.limits != null && (typeof b.limits !== "string" || b.limits.length > 120)) return "limits too long";
   if (b.blockside != null && (typeof b.blockside !== "string" || b.blockside.length > 40)) return "blockside too long";
   if (b.note != null && (typeof b.note !== "string" || b.note.length > MAX_NOTE_CHARS)) return "note too long";
-  if (typeof b.turnstile !== "string" || b.turnstile.length < 8 || b.turnstile.length > 4096) return "turnstile token required";
+  if (opts.requireTurnstile) {
+    if (typeof b.turnstile !== "string" || b.turnstile.length < 8 || b.turnstile.length > 4096) return "turnstile token required";
+  }
   const hasTime = b.from != null && b.from !== "" || b.to != null && b.to !== "";
   const hasDays = Array.isArray(b.days) && b.days.length > 0;
   if (hasTime || hasDays) {

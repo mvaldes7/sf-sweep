@@ -8,8 +8,18 @@ declare global {
   }
 }
 
-export function reportsEnabled(): boolean {
-  return !!(config.photoReports && config.reportsApiBase && config.turnstileSiteKey);
+export function reportsEnabled(cfg: Pick<typeof config, "photoReports" | "reportsApiBase"> = config): boolean {
+  return !!(cfg.photoReports && cfg.reportsApiBase);
+}
+
+/** Turnstile widget and token are used only when a public site key is set. Off in v1. */
+export function turnstileEnabled(siteKey: string = config.turnstileSiteKey): boolean {
+  return !!siteKey;
+}
+
+/** Widget markup. Empty when Turnstile is off so the script is never loaded. */
+export function reportTurnstileSlot(siteKey: string = config.turnstileSiteKey): string {
+  return turnstileEnabled(siteKey) ? '<div id="report-turnstile"></div>' : "";
 }
 
 let token = "";
@@ -70,17 +80,19 @@ export function openReportForm(side: SideRecord, host: HTMLElement): void {
       <label class="report-field">Note (optional)
         <input type="text" name="note" maxlength="500" autocomplete="off">
       </label>
-      <div id="report-turnstile"></div>
+      ${reportTurnstileSlot()}
       <p class="fine" id="report-status" role="status"></p>
       <button type="submit" class="primary" id="report-submit">Submit report</button>
     </form>`;
   host.appendChild(el);
   el.querySelector("#report-close")!.addEventListener("click", () => el.remove());
   fillLocation(side, el);
-  void loadTurnstile().then(() => {
-    const box = el.querySelector<HTMLElement>("#report-turnstile");
-    if (box && window.turnstile) window.turnstile.render(box, { sitekey: config.turnstileSiteKey, callback: (t) => { token = t; } });
-  }).catch((e) => setStatus(el, String((e as Error).message || e)));
+  if (turnstileEnabled()) {
+    void loadTurnstile().then(() => {
+      const box = el.querySelector<HTMLElement>("#report-turnstile");
+      if (box && window.turnstile) window.turnstile.render(box, { sitekey: config.turnstileSiteKey, callback: (t) => { token = t; } });
+    }).catch((e) => setStatus(el, String((e as Error).message || e)));
+  }
   el.querySelector("#report-inner")!.addEventListener("submit", (ev) => { ev.preventDefault(); void submitReport(el, ev.target as HTMLFormElement); });
 }
 
@@ -110,11 +122,11 @@ async function submitReport(el: HTMLElement, form: HTMLFormElement) {
   const submit = el.querySelector<HTMLButtonElement>("#report-submit");
   if (submit) submit.disabled = true;
   try {
-    if (!token) throw new Error("Complete the bot check first");
+    if (turnstileEnabled() && !token) throw new Error("Complete the bot check first");
     const fd = new FormData(form);
     const photo = fd.get("photo");
     if (!(photo instanceof File) || !photo.size) throw new Error("Choose one photo of the sign");
-    fd.set("cf-turnstile-response", token);
+    if (turnstileEnabled()) fd.set("cf-turnstile-response", token);
     const days = [...form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")].map((c) => c.value);
     if (days.length) fd.set("days", JSON.stringify(days));
     fd.delete("day");

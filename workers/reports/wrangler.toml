@@ -8,7 +8,7 @@ workers_dev = true
 
 [vars]
 ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
-# TODO: public Turnstile site key (not the secret). Leave empty until the Turnstile site is created.
+# Optional public Turnstile site key (not the secret). Off in v1; leave empty to skip verification.
 TURNSTILE_SITE_KEY = ""
 
 [[d1_databases]]
@@ -30,7 +30,7 @@ simple = { limit = 5, period = 60 }
 [env.dev]
 [env.dev.vars]
 ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev,http://localhost:5173"
-# TODO: public Turnstile site key (not the secret). Leave empty until the Turnstile site is created.
+# Optional public Turnstile site key (not the secret). Off in v1; leave empty to skip verification.
 TURNSTILE_SITE_KEY = ""
 
 [[env.dev.d1_databases]]

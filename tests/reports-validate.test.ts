@@ -29,8 +29,13 @@ describe("validateSubmit", () => {
     expect(validateSubmit({ ...ok(), from: "07:00", to: "07:30" })).toMatch(/together/);
     expect(validateSubmit({ ...ok(), days: ["Fri"], from: "07:70", to: "08:00" })).toMatch(/invalid time/);
   });
-  it("requires a turnstile token", () => {
-    expect(validateSubmit({ ...ok(), turnstile: "" })).toMatch(/turnstile/);
+  it("accepts a report with no turnstile token when captcha is off", () => {
+    expect(validateSubmit({ ...ok(), turnstile: "" })).toBeNull();
+    expect(validateSubmit({ ...ok(), turnstile: undefined })).toBeNull();
+  });
+  it("requires a turnstile token when captcha is on", () => {
+    expect(validateSubmit({ ...ok(), turnstile: "" }, { requireTurnstile: true })).toMatch(/turnstile/);
+    expect(validateSubmit({ ...ok() }, { requireTurnstile: true })).toBeNull();
   });
   it("reads fields from form data, including a :30 end time", () => {
     const fd = new FormData();

@@ -11,15 +11,19 @@ reported date, optional note).
 
 ## Feature flag (off by default)
 
-The "Report a sign" button is shown only when all of these are set at build time:
+The "Report a sign" button is shown only when both of these are set at build time:
 
 - `VITE_PHOTO_REPORTS=1`
 - `VITE_REPORTS_API_BASE` (the reports Worker URL)
-- `VITE_TURNSTILE_SITE_KEY` (public site key)
 
-Leave them unset in production. A frontend redeploy without this flag will not show
-the reporting UI. Deploying the frontend with the flag on, or deploying the real
-Worker (`workers/reports/src/index.ts`), still needs Mike's explicit OK.
+`VITE_TURNSTILE_SITE_KEY` is optional. v1 ships without a Turnstile site: when the
+key is unset, the form does not load or render the widget and submits without a
+token. The Worker skips verification when `TURNSTILE_SECRET` is unset or empty.
+Rate limiting (5 requests / 60 seconds) stays on.
+
+Leave the flag unset in production. A frontend redeploy without this flag will not
+show the reporting UI. Deploying the frontend with the flag on, or deploying the
+real Worker (`workers/reports/src/index.ts`), still needs Mike's explicit OK.
 
 ## Resources (Cloudflare free tier only)
 
@@ -32,7 +36,7 @@ other than `sf-sweep-reports`.
 | `sf-sweep-sign-photos` | KV namespace | `2e73ed962475440fb4a7edc35981cf78` | Photos, keyed by report id. Used instead of R2 (R2 is not enabled on this account; the Nov 4, 2026 decision also kept R2 off for static/basemap data). |
 | `sf-sweep-reports` | D1 database | `970b90d1-0ad2-4424-9807-517bca2a85a0` | Schema: `workers/reports/schema.sql` |
 | `sf-sweep-reports` | Worker | https://sf-sweep-reports.miggyman7.workers.dev | Live code must stay the 503 stub until Mike OKs the real Worker |
-| Turnstile site | Turnstile | TODO: public `TURNSTILE_SITE_KEY` (not created yet) | Fill wrangler `[vars]` and `VITE_TURNSTILE_SITE_KEY` after the site exists. Secret is the `TURNSTILE_SECRET` Worker secret |
+| Turnstile site | Turnstile (optional, off in v1) | not created | Verification is skipped when `TURNSTILE_SECRET` and `VITE_TURNSTILE_SITE_KEY` are unset. Add later (see ROADMAP). |
 | Rate limiting | Workers rate-limit binding | `namespace_id` `1802` in wrangler.toml | 5 requests / 60 seconds |
 | `REVIEW_TOKEN` | Worker secret | set with `wrangler secret put` | Not in git. Box path (if generated here): `/workspace/secrets/sfsweep_review_token.txt` |
 
@@ -48,16 +52,14 @@ npx wrangler d1 create sf-sweep-reports
 npx wrangler d1 execute sf-sweep-reports --remote --file=schema.sql
 # Do not run that execute against the sf-sweep alerts database.
 
-# Turnstile site (siteverify-managed, hosts sf-sweep.pages.dev and localhost):
-# created via the Cloudflare API; store the site key in wrangler [vars] and the
-# secret with: npx wrangler secret put TURNSTILE_SECRET
-
 # Placeholder Worker only (503 for every request), not src/index.ts:
 npx wrangler deploy -c wrangler.stub.toml
 
 # Secrets (values are never committed):
 #   npx wrangler secret put REVIEW_TOKEN
-#   npx wrangler secret put TURNSTILE_SECRET
+# Turnstile is off in v1. To add it later: create a site (sf-sweep.pages.dev and
+# localhost), put the public site key in wrangler [vars] and VITE_TURNSTILE_SITE_KEY,
+# and set the secret with: npx wrangler secret put TURNSTILE_SECRET
 ```
 
 The real Worker is deployed only after a separate OK:
@@ -82,5 +84,6 @@ The review API is `GET/POST /api/review/...` and requires
 
 `POST /api/reports` (multipart, CORS-limited to the Pages origins): one JPEG, PNG
 or WebP photo (3 MB cap), block side, device geolocation, optional days and
-`HH:MM` times, Turnstile token. The Worker strips EXIF (including GPS) before the
-value is stored in the `sf-sweep-sign-photos` KV namespace (keyed by report id, 3 MB cap).
+`HH:MM` times, and a Turnstile token only when `TURNSTILE_SECRET` is set. The Worker
+strips EXIF (including GPS) before the value is stored in the `sf-sweep-sign-photos`
+KV namespace (keyed by report id, 3 MB cap). Rate limiting applies to every submit.

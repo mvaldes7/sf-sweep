@@ -25,6 +25,7 @@ export const config = {
    */
   photoReports: import.meta.env.VITE_PHOTO_REPORTS === "1" || import.meta.env.VITE_PHOTO_REPORTS === "true",
   reportsApiBase: import.meta.env.VITE_REPORTS_API_BASE || "",
+  /** Optional. Empty in v1: the form does not load or render a Turnstile widget. */
   turnstileSiteKey: import.meta.env.VITE_TURNSTILE_SITE_KEY || "",
 };
 

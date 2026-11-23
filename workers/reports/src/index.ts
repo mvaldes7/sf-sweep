@@ -13,8 +13,9 @@ export interface Env {
   DB: D1Database;
   PHOTOS: KVNamespace;
   ALLOWED_ORIGIN: string;
-  TURNSTILE_SITE_KEY: string;
-  TURNSTILE_SECRET: string;
+  TURNSTILE_SITE_KEY?: string;
+  /** When unset or empty, Turnstile verification is skipped (v1). */
+  TURNSTILE_SECRET?: string;
   REVIEW_TOKEN: string;
   API_LIMITER?: { limit(o: { key: string }): Promise<{ success: boolean }> };
 }
@@ -160,13 +161,16 @@ async function handleSubmit(req: Request, env: Env, cors: Record<string, string>
   try { stripped = stripExif(raw); } catch (e) { throw new HttpError(400, (e as Error).message || "invalid photo"); }
 
   const fields = fieldsFromForm(form);
-  const err = validateSubmit(fields);
+  const secret = (env.TURNSTILE_SECRET || "").trim();
+  const err = validateSubmit(fields, { requireTurnstile: !!secret });
   if (err) throw new HttpError(400, err);
   const f = fields as SubmitFields;
 
   const ip = req.headers.get("cf-connecting-ip");
-  const ok = await verifyTurnstile(f.turnstile, env.TURNSTILE_SECRET, ip);
-  if (!ok) throw new HttpError(403, "turnstile failed");
+  if (secret) {
+    const ok = await verifyTurnstile(f.turnstile || "", secret, ip);
+    if (!ok) throw new HttpError(403, "turnstile failed");
+  }
 
   const id = crypto.randomUUID();
   const key = id; // KV key is the report id

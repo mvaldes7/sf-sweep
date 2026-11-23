@@ -62,11 +62,12 @@ a git merge.
 GitHub issues hold the backlog.
 
 - Photo reports of new or changed street-cleaning signs and schedules, with a review queue before anything
-  changes on the map ([#10](https://github.com/mvaldes7/sf-sweep/issues/10), opened Nov 21, 2026). A "Report a
-  sign" action would capture a photo, auto-fill location and block side, and take an optional note. Confirmed
-  reports could show a "recently reported change" marker or a corrected schedule. Not started; needs Mike's go
-  before any build. Open questions in the issue include free-tier photo storage, abuse controls, who reviews
-  reports, and privacy (faces and plates).
+  changes on the map ([#10](https://github.com/mvaldes7/sf-sweep/issues/10), opened Nov 21, 2026). v1 is in
+  [#14](https://github.com/mvaldes7/sf-sweep/pull/14) and uses rate limiting only (no Turnstile). A "Report a
+  sign" action captures a photo, auto-fills location and block side, and takes an optional note. Confirmed
+  reports produce a proposed corrections-file entry; the map does not change until that is applied.
+- Follow-up: add a Turnstile bot check to photo reports later (create the widget, set `TURNSTILE_SECRET` and
+  `VITE_TURNSTILE_SITE_KEY`). v1 ships without it.
 - Light-theme contrast for `--soon` and `--clear` in `src/style.css`. On the light `--bg` (`#eef0f3`), `--soon`
   (`#a87400`) is about 3.5:1 and `--clear` (`#3f9d68`) is about 3.0:1, short of WCAG AA 4.5:1 for normal text.
 - An optional ruleset on `main` (required checks, no direct pushes). The repo currently has no rulesets and
