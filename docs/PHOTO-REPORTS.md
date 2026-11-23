@@ -86,4 +86,7 @@ The review API is `GET/POST /api/review/...` and requires
 or WebP photo (3 MB cap), block side, device geolocation, optional days and
 `HH:MM` times, and a Turnstile token only when `TURNSTILE_SECRET` is set. The Worker
 strips EXIF (including GPS) before the value is stored in the `sf-sweep-sign-photos`
-KV namespace (keyed by report id, 3 MB cap). Rate limiting applies to every submit.
+KV namespace (keyed by report id, 3 MB cap, 30-day TTL). Rate limiting applies to
+every submit. The Worker also caps the queue at 200 pending reports and 300
+submits per UTC day, stores lat/lng rounded to 4 decimals, and keeps rejected or
+confirmed rows for 90 days (see ROADMAP).

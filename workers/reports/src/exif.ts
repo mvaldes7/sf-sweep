@@ -2,6 +2,16 @@
 export const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
 export type PhotoKind = "jpeg" | "png" | "webp";
 
+export const HEIC_PHOTO_ERROR = "This photo is in HEIC format. Please upload a JPEG, PNG, or WebP. On iPhone, the form asks for JPEG so the photo is converted on upload.";
+
+/** iPhone HEIC/HEIF (ISO BMFF ftyp brand). */
+export function isHeic(buf: Uint8Array): boolean {
+  if (buf.length < 12) return false;
+  if (buf[4] !== 0x66 || buf[5] !== 0x74 || buf[6] !== 0x79 || buf[7] !== 0x70) return false; // ftyp
+  const brand = String.fromCharCode(buf[8], buf[9], buf[10], buf[11]).toLowerCase();
+  return brand.startsWith("hei") || brand.startsWith("hev") || brand === "mif1" || brand === "msf1";
+}
+
 export function detectKind(buf: Uint8Array): PhotoKind | null {
   if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return "jpeg";
   if (buf.length >= 8 && buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
@@ -23,6 +33,7 @@ export function extFor(kind: PhotoKind): string {
 export function stripExif(buf: Uint8Array): { bytes: Uint8Array; kind: PhotoKind } {
   if (buf.byteLength === 0) throw new Error("empty photo");
   if (buf.byteLength > MAX_PHOTO_BYTES) throw new Error("photo too large");
+  if (isHeic(buf)) throw new Error(HEIC_PHOTO_ERROR);
   const kind = detectKind(buf);
   if (!kind) throw new Error("unsupported image type");
   if (kind === "jpeg") return { bytes: stripJpeg(buf), kind };
@@ -34,38 +45,73 @@ function u16be(b: Uint8Array, i: number): number { return (b[i] << 8) | b[i + 1]
 function u32be(b: Uint8Array, i: number): number { return (b[i] * 0x1000000 + (b[i + 1] << 16) + (b[i + 2] << 8) + b[i + 3]) >>> 0; }
 function u32le(b: Uint8Array, i: number): number { return (b[i] + (b[i + 1] << 8) + (b[i + 2] << 16) + b[i + 3] * 0x1000000) >>> 0; }
 
-/** Drop APP1-APP15 (EXIF/XMP/IPTC) and COM comments. Keep APP0 (JFIF) and the image payload. */
+/**
+ * Drop APP1-APP15 (EXIF/XMP/IPTC) and COM comments. Keep APP0 (JFIF) and the image payload.
+ * After SOS, scan entropy to the next real marker (0xFF then a byte other than 0x00 or RST
+ * 0xD0-0xD7) and re-enter the segment loop so APPn/COM between progressive scans are dropped.
+ * Stop at EOI and discard any trailer (appended images). Copies via keep-ranges into one
+ * Uint8Array (no number[] / Uint8Array.from) so a ~2.3 MB photo stays well under the 10 ms
+ * Workers free-plan CPU budget.
+ */
 function stripJpeg(buf: Uint8Array): Uint8Array {
   if (buf[0] !== 0xff || buf[1] !== 0xd8) throw new Error("invalid jpeg");
-  const out: number[] = [0xff, 0xd8];
+  const ranges: [number, number][] = [[0, 2]];
   let i = 2;
-  while (i < buf.length) {
+  let done = false;
+  while (i < buf.length && !done) {
     if (buf[i] !== 0xff) throw new Error("invalid jpeg");
     let j = i;
     while (j < buf.length && buf[j] === 0xff) j++;
     if (j >= buf.length) throw new Error("invalid jpeg");
     const marker = buf[j];
+    const start = j - 1;
     i = j + 1;
-    if (marker === 0xd9) { out.push(0xff, 0xd9); break; } // EOI
-    if (marker === 0xda) { // SOS: copy the rest (entropy-coded data + EOI)
-      out.push(0xff, 0xda);
-      for (let k = i; k < buf.length; k++) out.push(buf[k]);
+    if (marker === 0xd9) {
+      ranges.push([start, start + 2]);
       break;
     }
     if (marker === 0xd8) throw new Error("invalid jpeg");
-    // standalone markers (RST, SOI already handled) have no length
-    if (marker >= 0xd0 && marker <= 0xd7) { out.push(0xff, marker); continue; }
+    if (marker >= 0xd0 && marker <= 0xd7) {
+      ranges.push([start, start + 2]);
+      continue;
+    }
     if (i + 1 >= buf.length) throw new Error("invalid jpeg");
     const len = u16be(buf, i);
     if (len < 2 || i + len > buf.length) throw new Error("invalid jpeg");
-    const drop = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe;
-    if (!drop) {
-      out.push(0xff, marker);
-      for (let k = 0; k < len; k++) out.push(buf[i + k]);
+    if (marker === 0xda) {
+      const headerEnd = i + len;
+      ranges.push([start, headerEnd]);
+      let k = headerEnd;
+      let found = false;
+      while (k < buf.length) {
+        const ff = buf.indexOf(0xff, k);
+        if (ff < 0 || ff + 1 >= buf.length) break;
+        const nxt = buf[ff + 1];
+        if (nxt === 0x00 || (nxt >= 0xd0 && nxt <= 0xd7)) { k = ff + 2; continue; }
+        if (nxt === 0xff) { k = ff + 1; continue; }
+        if (ff > headerEnd) ranges.push([headerEnd, ff]);
+        found = true;
+        if (nxt === 0xd9) {
+          ranges.push([ff, ff + 2]);
+          done = true;
+        } else {
+          i = ff;
+        }
+        break;
+      }
+      if (!found) throw new Error("invalid jpeg");
+      continue;
     }
+    const drop = (marker >= 0xe1 && marker <= 0xef) || marker === 0xfe;
+    if (!drop) ranges.push([start, i + len]);
     i += len;
   }
-  return Uint8Array.from(out);
+  let n = 0;
+  for (const [a, b] of ranges) n += b - a;
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const [a, b] of ranges) { out.set(buf.subarray(a, b), o); o += b - a; }
+  return out;
 }
 
 const PNG_DROP = new Set(["eXIf", "tEXt", "zTXt", "iTXt", "tIME"]);

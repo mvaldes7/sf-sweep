@@ -68,6 +68,9 @@ GitHub issues hold the backlog.
   reports produce a proposed corrections-file entry; the map does not change until that is applied.
 - Follow-up: add a Turnstile bot check to photo reports later (create the widget, set `TURNSTILE_SECRET` and
   `VITE_TURNSTILE_SITE_KEY`). v1 ships without it.
+- Photo-report retention: rejected and confirmed rows are kept 90 days. `cleanupExpiredReports` in the reports
+  Worker deletes older rows and their photos with no schema change. It runs when the review list is loaded, and
+  can be put on a cron when the real Worker is deployed.
 - Light-theme contrast for `--soon` and `--clear` in `src/style.css`. On the light `--bg` (`#eef0f3`), `--soon`
   (`#a87400`) is about 3.5:1 and `--clear` (`#3f9d68`) is about 3.0:1, short of WCAG AA 4.5:1 for normal text.
 - An optional ruleset on `main` (required checks, no direct pushes). The repo currently has no rulesets and

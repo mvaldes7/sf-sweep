@@ -8,6 +8,16 @@ declare global {
   }
 }
 
+export const PHOTO_ACCEPT = "image/jpeg,image/png,image/webp";
+
+export const HEIC_UPLOAD_ERROR = "This photo is in HEIC format. Please upload a JPEG, PNG, or WebP. On iPhone, the form asks for JPEG so the photo is converted on upload.";
+
+export function isHeicUpload(file: File): boolean {
+  const type = (file.type || "").toLowerCase();
+  const name = (file.name || "").toLowerCase();
+  return type === "image/heic" || type === "image/heif" || name.endsWith(".heic") || name.endsWith(".heif");
+}
+
 export function reportsEnabled(cfg: Pick<typeof config, "photoReports" | "reportsApiBase"> = config): boolean {
   return !!(cfg.photoReports && cfg.reportsApiBase);
 }
@@ -54,7 +64,7 @@ export function openReportForm(side: SideRecord, host: HTMLElement): void {
     <p class="fine">Photograph only the street-cleaning sign. The map will not change until a report is reviewed.</p>
     <form id="report-inner">
       <label class="report-field">Photo
-        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp,image/*" capture="environment" required>
+        <input type="file" name="photo" accept="${PHOTO_ACCEPT}" capture="environment" required>
       </label>
       <div class="muted" id="report-loc">Getting your location...</div>
       <input type="hidden" name="lat" id="report-lat">
@@ -126,6 +136,7 @@ async function submitReport(el: HTMLElement, form: HTMLFormElement) {
     const fd = new FormData(form);
     const photo = fd.get("photo");
     if (!(photo instanceof File) || !photo.size) throw new Error("Choose one photo of the sign");
+    if (isHeicUpload(photo)) throw new Error(HEIC_UPLOAD_ERROR);
     if (turnstileEnabled()) fd.set("cf-turnstile-response", token);
     const days = [...form.querySelectorAll<HTMLInputElement>("input[name=day]:checked")].map((c) => c.value);
     if (days.length) fd.set("days", JSON.stringify(days));

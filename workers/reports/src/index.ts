@@ -22,6 +22,52 @@ export interface Env {
 
 class HttpError extends Error { constructor(public status: number, msg: string) { super(msg); } }
 
+/** Max pending reports kept in D1/KV at once. */
+export const PENDING_REPORT_CEILING = 200;
+/** Daily submit cap, under the 1k/day KV write free-tier limit. */
+export const DAILY_SUBMIT_CAP = 300;
+/** Photo object TTL in KV (seconds). */
+export const PHOTO_TTL_SECONDS = 30 * 24 * 60 * 60;
+/** Rejected and confirmed rows are kept this many days, then cleaned up. */
+export const REPORT_RETENTION_DAYS = 90;
+
+/** Round stored coordinates to 4 decimal degrees (about 10 m). */
+export function roundCoord(n: number): number {
+  return Math.round(n * 10000) / 10000;
+}
+
+export function startOfUtcDay(now: number): number {
+  const d = new Date(now);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+}
+
+export function secondsUntilNextUtcMidnight(now: number): number {
+  return Math.max(1, Math.ceil((startOfUtcDay(now) + 24 * 60 * 60 * 1000 - now) / 1000));
+}
+
+async function countRows(env: Env, sql: string, bind?: number): Promise<number> {
+  const stmt = bind === undefined ? env.DB.prepare(sql) : env.DB.prepare(sql).bind(bind);
+  const row = await stmt.first<{ n: number }>();
+  return Number(row?.n ?? 0);
+}
+
+/** Delete rejected/confirmed reports (and their photos) older than 90 days. No schema change. */
+export async function cleanupExpiredReports(env: Env, now = Date.now()): Promise<number> {
+  const cutoff = now - REPORT_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const { results } = await env.DB.prepare(
+    "SELECT id, photo_key FROM reports WHERE status IN ('rejected', 'confirmed') AND COALESCE(reviewed_at, created_at) < ?",
+  ).bind(cutoff).all<{ id: string; photo_key: string | null }>();
+  const rows = results ?? [];
+  for (const r of rows) {
+    if (r.photo_key) {
+      try { await env.PHOTOS.delete(r.photo_key); } catch (e) { console.warn("photo delete failed", r.photo_key, String(e)); }
+    }
+    await env.DB.prepare("DELETE FROM reports WHERE id = ?").bind(r.id).run();
+  }
+  return rows.length;
+}
+
+
 export function originAllowed(origin: string | null, allowedCsv: string): boolean {
   if (!origin) return false;
   let u: URL;
@@ -149,8 +195,9 @@ async function handleSubmit(req: Request, env: Env, cors: Record<string, string>
   const ct = req.headers.get("content-type") || "";
   if (!ct.toLowerCase().includes("multipart/form-data")) throw new HttpError(400, "expected multipart form data");
   const cl = req.headers.get("content-length");
+  if (cl == null || cl === "") throw new HttpError(411, "content-length required");
   // multipart overhead + 3 MB photo
-  if (cl !== null && (!/^\d+$/.test(cl) || Number(cl) > MAX_PHOTO_BYTES + 64 * 1024)) throw new HttpError(413, "body too large");
+  if (!/^\d+$/.test(cl) || Number(cl) > MAX_PHOTO_BYTES + 64 * 1024) throw new HttpError(413, "body too large");
   const form = await req.formData();
   const files = form.getAll("photo").filter((v) => typeof v !== "string") as { size: number; arrayBuffer: () => Promise<ArrayBuffer> }[];
   if (files.length !== 1) throw new HttpError(400, "exactly one photo is required");
@@ -172,22 +219,39 @@ async function handleSubmit(req: Request, env: Env, cors: Record<string, string>
     if (!ok) throw new HttpError(403, "turnstile failed");
   }
 
+  const pending = await countRows(env, "SELECT COUNT(*) AS n FROM reports WHERE status = 'pending'");
+  if (pending >= PENDING_REPORT_CEILING) {
+    return json({ error: "too many pending reports" }, 503, { ...cors, "Retry-After": "3600" });
+  }
+  const now = Date.now();
+  const today = await countRows(env, "SELECT COUNT(*) AS n FROM reports WHERE created_at >= ?", startOfUtcDay(now));
+  if (today >= DAILY_SUBMIT_CAP) {
+    return json({ error: "daily submit limit reached" }, 429, { ...cors, "Retry-After": String(secondsUntilNextUtcMidnight(now)) });
+  }
+
   const id = crypto.randomUUID();
   const key = id; // KV key is the report id
-  await env.PHOTOS.put(key, stripped.bytes, { metadata: { contentType: mimeFor(stripped.kind) } });
-  const now = Date.now();
+  const lat = roundCoord(f.lat);
+  const lng = roundCoord(f.lng);
   await env.DB.prepare(
     `INSERT INTO reports (id, status, cnn, side, street, limits, blockside, lat, lng, days, from_time, to_time, weeks, holidays, note, photo_key, photo_type, created_at)
      VALUES (?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).bind(
-    id, f.cnn, f.side, f.street ?? null, f.limits ?? null, f.blockside ?? null, f.lat, f.lng,
+    id, f.cnn, f.side, f.street ?? null, f.limits ?? null, f.blockside ?? null, lat, lng,
     f.days ? JSON.stringify(f.days) : null, f.from ?? null, f.to ?? null, f.weeks ? JSON.stringify(f.weeks) : null,
     f.holidays ? 1 : 0, f.note ?? null, key, mimeFor(stripped.kind), now,
   ).run();
+  try {
+    await env.PHOTOS.put(key, stripped.bytes, { expirationTtl: PHOTO_TTL_SECONDS, metadata: { contentType: mimeFor(stripped.kind) } });
+  } catch (e) {
+    try { await env.DB.prepare("DELETE FROM reports WHERE id = ?").bind(id).run(); } catch (del) { console.warn("rollback failed", String(del)); }
+    throw e;
+  }
   return json({ ok: true, id }, 201, cors);
 }
 
 async function handleReviewList(env: Env, cors: Record<string, string>): Promise<Response> {
+  try { await cleanupExpiredReports(env); } catch (e) { console.warn("cleanup expired reports failed", String(e)); }
   const { results } = await env.DB.prepare(
     "SELECT id, status, cnn, side, street, limits, blockside, lat, lng, days, from_time, to_time, weeks, holidays, note, created_at, reviewed_at FROM reports ORDER BY created_at DESC LIMIT 200",
   ).all();
@@ -206,7 +270,7 @@ async function handleReviewPhoto(env: Env, id: string, cors: Record<string, stri
   const got = await env.PHOTOS.getWithMetadata<{ contentType?: string }>(row.photo_key, "arrayBuffer");
   if (got.value == null) throw new HttpError(404, "photo missing");
   const ct = got.metadata?.contentType || row.photo_type || "application/octet-stream";
-  return new Response(got.value, { status: 200, headers: { ...cors, "content-type": ct, "cache-control": "private, max-age=300" } });
+  return new Response(got.value, { status: 200, headers: { ...cors, "content-type": ct, "cache-control": "private, max-age=300", "X-Content-Type-Options": "nosniff", "Content-Disposition": "inline" } });
 }
 
 async function handleReviewAction(req: Request, env: Env, id: string, action: string, cors: Record<string, string>): Promise<Response> {
@@ -222,6 +286,9 @@ async function handleReviewAction(req: Request, env: Env, id: string, action: st
   if (action === "reject") {
     await env.DB.prepare("UPDATE reports SET status = 'rejected', reviewed_at = ?, review_note = ? WHERE id = ?")
       .bind(now, typeof body.note === "string" ? body.note : null, id).run();
+    if (typeof row.photo_key === "string" && row.photo_key) {
+      try { await env.PHOTOS.delete(row.photo_key); } catch (e) { console.warn("photo delete failed", String(e)); }
+    }
     return json({ ok: true, id, status: "rejected" }, 200, cors);
   }
   if (action === "edit") {

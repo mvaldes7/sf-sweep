@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { detectKind, stripExif, MAX_PHOTO_BYTES } from "../workers/reports/src/exif";
+import { detectKind, isHeic, stripExif, HEIC_PHOTO_ERROR, MAX_PHOTO_BYTES } from "../workers/reports/src/exif";
 
 function u16be(n: number): number[] { return [(n >> 8) & 0xff, n & 0xff]; }
 
@@ -92,5 +92,94 @@ describe("stripExif", () => {
     expect(() => stripExif(new Uint8Array())).toThrow(/empty/);
     expect(() => stripExif(new Uint8Array(MAX_PHOTO_BYTES + 1).fill(0xff))).toThrow(/too large/);
     expect(() => stripExif(new Uint8Array([1, 2, 3, 4]))).toThrow(/unsupported/);
+  });
+});
+
+function hasMarker(buf: Uint8Array, marker: number): boolean {
+  for (let i = 0; i < buf.length - 1; i++) if (buf[i] === 0xff && buf[i + 1] === marker) return true;
+  return false;
+}
+
+function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.length + b.length);
+  out.set(a, 0);
+  out.set(b, a.length);
+  return out;
+}
+
+function heicBytes(): Uint8Array {
+  // ISO BMFF: size + 'ftyp' + 'heic' brand
+  return Uint8Array.from([
+    0, 0, 0, 24, 0x66, 0x74, 0x79, 0x70, 0x68, 0x65, 0x69, 0x63,
+    0, 0, 0, 0, 0x68, 0x65, 0x69, 0x63, 0, 0, 0, 0,
+  ]);
+}
+
+describe("stripJpeg trailers and later scans", () => {
+  it("drops GPS/APP1 from a GPS JPEG that has another GPS JPEG appended, and nothing after EOI", () => {
+    const first = jpegWithExif();
+    const raw = concat(first, first);
+    expect(new TextDecoder().decode(raw)).toContain("GPS");
+    const { bytes, kind } = stripExif(raw);
+    expect(kind).toBe("jpeg");
+    const text = new TextDecoder().decode(bytes);
+    expect(text).not.toContain("GPS");
+    expect(text).not.toContain("Exif");
+    expect(hasMarker(bytes, 0xe1)).toBe(false);
+    expect(bytes[bytes.length - 2]).toBe(0xff);
+    expect(bytes[bytes.length - 1]).toBe(0xd9);
+    expect(bytes).toEqual(stripExif(first).bytes);
+  });
+
+  it("drops APPn between progressive SOS scans", () => {
+    const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+    const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53];
+    const app1 = [0xff, 0xe1, ...u16be(2 + exif.length), ...exif];
+    const sos = [0xff, 0xda, ...u16be(2)];
+    const raw = Uint8Array.from([0xff, 0xd8, ...app0, ...sos, 0x11, ...app1, ...sos, 0x22, 0xff, 0xd9]);
+    expect(new TextDecoder().decode(raw)).toContain("GPS");
+    const { bytes } = stripExif(raw);
+    const text = new TextDecoder().decode(bytes);
+    expect(text).not.toContain("GPS");
+    expect(text).not.toContain("Exif");
+    expect(hasMarker(bytes, 0xe1)).toBe(false);
+    expect(hasMarker(bytes, 0xda)).toBe(true);
+    expect(bytes[bytes.length - 2]).toBe(0xff);
+    expect(bytes[bytes.length - 1]).toBe(0xd9);
+    expect([...bytes]).toContain(0x11);
+    expect([...bytes]).toContain(0x22);
+  });
+
+  it("strips a ~2.3 MB JPEG in well under 10 ms using keep-ranges", () => {
+    const app0 = [0xff, 0xe0, ...u16be(16), 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01, 0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00];
+    const exif = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00, 0x47, 0x50, 0x53];
+    const app1 = [0xff, 0xe1, ...u16be(2 + exif.length), ...exif];
+    const scan = new Uint8Array(2_300_000).fill(0x5a);
+    const raw = new Uint8Array(2 + app0.length + app1.length + 4 + scan.length + 2);
+    raw[0] = 0xff; raw[1] = 0xd8;
+    raw.set(app0, 2);
+    raw.set(app1, 2 + app0.length);
+    const sosAt = 2 + app0.length + app1.length;
+    raw.set([0xff, 0xda, 0x00, 0x02], sosAt);
+    raw.set(scan, sosAt + 4);
+    raw[raw.length - 2] = 0xff;
+    raw[raw.length - 1] = 0xd9;
+    stripExif(jpegWithExif()); // warmup
+    const t0 = performance.now();
+    const { bytes, kind } = stripExif(raw);
+    const ms = performance.now() - t0;
+    expect(kind).toBe("jpeg");
+    expect(bytes.byteLength).toBe(raw.byteLength - app1.length);
+    expect(new TextDecoder().decode(bytes.subarray(0, 64))).not.toContain("GPS");
+    expect(ms).toBeLessThan(10);
+  });
+});
+
+describe("HEIC uploads", () => {
+  it("rejects a HEIC buffer with a friendly error", () => {
+    const raw = heicBytes();
+    expect(isHeic(raw)).toBe(true);
+    expect(detectKind(raw)).toBeNull();
+    expect(() => stripExif(raw)).toThrow(HEIC_PHOTO_ERROR);
   });
 });
