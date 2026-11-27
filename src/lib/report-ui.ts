@@ -66,7 +66,7 @@ export function openReportForm(side: SideRecord, host: HTMLElement): void {
       <label class="report-field">Photo
         <input type="file" name="photo" accept="${PHOTO_ACCEPT}" capture="environment" required>
       </label>
-      <div class="muted" id="report-loc">Getting your location...</div>
+      <div class="muted" id="report-loc">Getting your location…</div>
       <input type="hidden" name="lat" id="report-lat">
       <input type="hidden" name="lng" id="report-lng">
       <input type="hidden" name="cnn" value="${esc(side.cnn)}">
@@ -128,7 +128,7 @@ function fillLocation(side: SideRecord, el: HTMLElement) {
 }
 
 async function submitReport(el: HTMLElement, form: HTMLFormElement) {
-  const status = setStatus(el, "Sending...");
+  const status = setStatus(el, "Sending…");
   const submit = el.querySelector<HTMLButtonElement>("#report-submit");
   if (submit) submit.disabled = true;
   try {

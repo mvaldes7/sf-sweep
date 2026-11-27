@@ -7,8 +7,8 @@ Worker; there is no user account.
 Sources for this file: merged PRs, GitHub issues, `docs/`, and recorded product decisions. Items whose status
 could not be confirmed are marked **(status unclear)**.
 
-Planned work lives in GitHub issues (and in the backlog below). As of Nov 21, 2026 the open issue is
-[#10](https://github.com/mvaldes7/sf-sweep/issues/10).
+Planned work lives in GitHub issues (and in the backlog below). As of Nov 27, 2026 the open issue is
+[#10](https://github.com/mvaldes7/sf-sweep/issues/10), implemented in [#14](https://github.com/mvaldes7/sf-sweep/pull/14).
 
 ## Shipped
 
@@ -53,19 +53,31 @@ a git merge.
   `pnpm tickets` and recovery via `curl --fail` from a specific older deployment, never from the production
   hostname ([#8](https://github.com/mvaldes7/sf-sweep/pull/8)).
 
+### Schedule corrections and sign-week labels (Nov 21, 2026)
+
+- Posted-sign schedule overrides live in a versioned `src/data/corrections.json` file and are applied when
+  `pnpm data` runs. The first entry is 30th Ave west, Geary–Anza, Friday 07:00–07:30 except holidays
+  ([#12](https://github.com/mvaldes7/sf-sweep/pull/12)).
+- When DataSF stores the same weekday and hours as two rows split by week of month, those weeks are unioned
+  so the My car card and the rendered sign can show EVERY WEEK
+  ([#13](https://github.com/mvaldes7/sf-sweep/pull/13)).
+
 ## In progress
 
-- No other open pull requests as of Nov 21, 2026 (besides the one adding this file).
+- Photo reports of new or changed street-cleaning signs
+  ([#10](https://github.com/mvaldes7/sf-sweep/issues/10),
+  [#14](https://github.com/mvaldes7/sf-sweep/pull/14)). Implemented and waiting on review and merge. A
+  "Report a sign" action (photo, device location, optional days and times) stays hidden unless
+  `VITE_PHOTO_REPORTS=1` and `VITE_REPORTS_API_BASE` are set at build time; off by default. The reports
+  Worker stores photos in KV and metadata in D1, rate-limits submits, and on confirm returns a proposed
+  `corrections.json` entry. The map does not change until that entry is applied. Turnstile is optional
+  and off in v1. The live Worker is still the 503 stub. Merging this PR, deploying the real Worker,
+  flipping the flag, and a frontend Pages deploy each need Mike's separate OK.
 
 ## Planned / backlog
 
 GitHub issues hold the backlog.
 
-- Photo reports of new or changed street-cleaning signs and schedules, with a review queue before anything
-  changes on the map ([#10](https://github.com/mvaldes7/sf-sweep/issues/10), opened Nov 21, 2026). v1 is in
-  [#14](https://github.com/mvaldes7/sf-sweep/pull/14) and uses rate limiting only (no Turnstile). A "Report a
-  sign" action captures a photo, auto-fills location and block side, and takes an optional note. Confirmed
-  reports produce a proposed corrections-file entry; the map does not change until that is applied.
 - Follow-up: add a Turnstile bot check to photo reports later (create the widget, set `TURNSTILE_SECRET` and
   `VITE_TURNSTILE_SITE_KEY`). v1 ships without it.
 - Photo-report retention: rejected and confirmed rows are kept 90 days. `cleanupExpiredReports` in the reports
