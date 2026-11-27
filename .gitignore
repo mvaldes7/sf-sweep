@@ -4,6 +4,7 @@ dist
 public/data/*
 !public/data/.gitkeep
 worker/.wrangler
+workers/reports/.wrangler
 .env
 .env.*
 .dev.vars

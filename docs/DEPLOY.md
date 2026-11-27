@@ -67,7 +67,9 @@ Re-check the SFMTA holiday page each year and edit `src/data/holidays.json`.
 bbox -122.65,37.65,-122.30,37.86) from a public Protomaps daily build and unpacks it into static tiles at
 `/data/basemap/{z}/{x}/{y}.mvt` (1113 files, about 33 MB uncompressed). Pages does not answer range requests with 206 (tested 2026-11-04), so a single .pmtiles file does not work there. Glyphs are self-hosted in
 `public/fonts`. Set `VITE_BASEMAP_PMTILES_URL=off` to disable.
-R2 is not used (decision 2026-11-04): all static data, including the basemap, is served by Pages.
+R2 is not used (decision 2026-11-04 for static/basemap data; sign-photo reports use the
+`sf-sweep-sign-photos` KV namespace instead). See `docs/PHOTO-REPORTS.md`.
+The reports Worker and the reporting UI each need Mike's explicit OK before a real deploy.
 
 ## Build guard
 

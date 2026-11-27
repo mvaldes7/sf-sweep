@@ -118,3 +118,33 @@ body.safe-on .timelapse { display: none; }
 
 .search-status:not(:empty) { padding: 6px 12px; background: var(--panel, #fff); color: var(--fg, #111); border-radius: 8px; font-size: 12px; }
 .results li[aria-selected="true"] { outline: 2px solid #1680e8; outline-offset: -2px; }
+
+.report-form { margin-top: 12px; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.report-h { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.report-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; margin: 8px 0; flex: 1; }
+.report-field input { font: inherit; font-size: 16px; padding: 8px 10px; min-height: 44px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--fg); }
+.report-days { border: 0; padding: 0; margin: 8px 0; display: flex; flex-wrap: wrap; align-items: center; }
+.report-days legend { font-size: 13px; margin-bottom: 4px; width: 100%; }
+.report-days label { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; min-height: 44px; padding-right: 12px; }
+.report-check { display: flex; align-items: center; gap: 8px; font-size: 13px; margin: 8px 0; min-height: 44px; }
+#report-turnstile { margin: 8px 0; }
+.report-form .close,
+#report-sign,
+#car-report,
+.report-form .primary {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+.report-form .primary { width: 100%; }
+.report-form :is(button, input, a):focus-visible,
+.report-days label:has(input:focus-visible),
+.report-check:has(input:focus-visible) {
+  outline: 2px solid var(--fg);
+  outline-offset: 2px;
+}
+.report-form .fine,
+.report-form #report-loc { text-wrap: pretty; }

@@ -1,0 +1,9 @@
+# Local boot check only. No remote IDs or bindings. Do not deploy this file.
+name = "sf-sweep-reports"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "http://127.0.0.1"
+TURNSTILE_SITE_KEY = ""

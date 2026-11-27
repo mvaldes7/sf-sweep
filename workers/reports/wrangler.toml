@@ -1,0 +1,43 @@
+# sf-sweep-reports: photo reports + review queue (Cloudflare Workers free tier).
+# Do not deploy this real Worker (main = src/index.ts) without Mike's explicit OK.
+# The live placeholder is uploaded with wrangler.stub.toml and returns 503 for every request.
+name = "sf-sweep-reports"
+main = "src/index.ts"
+compatibility_date = "2025-06-01"
+workers_dev = true
+
+[vars]
+ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev"
+# Optional public Turnstile site key (not the secret). Off in v1; leave empty to skip verification.
+TURNSTILE_SITE_KEY = ""
+
+[[d1_databases]]
+binding = "DB"
+database_name = "sf-sweep-reports"
+database_id = "970b90d1-0ad2-4424-9807-517bca2a85a0"
+
+[[kv_namespaces]]
+binding = "PHOTOS"
+id = "2e73ed962475440fb4a7edc35981cf78"
+
+# Account-unique integer for this Worker (sf-sweep-alerts uses 1801). Free-plan rate limiting binding.
+[[ratelimits]]
+name = "API_LIMITER"
+namespace_id = "1802"
+simple = { limit = 5, period = 60 }
+
+# Local development only: `npx wrangler dev --env dev` from this directory.
+[env.dev]
+[env.dev.vars]
+ALLOWED_ORIGIN = "https://sf-sweep.pages.dev,https://*.sf-sweep.pages.dev,http://localhost:5173"
+# Optional public Turnstile site key (not the secret). Off in v1; leave empty to skip verification.
+TURNSTILE_SITE_KEY = ""
+
+[[env.dev.d1_databases]]
+binding = "DB"
+database_name = "sf-sweep-reports"
+database_id = "970b90d1-0ad2-4424-9807-517bca2a85a0"
+
+[[env.dev.kv_namespaces]]
+binding = "PHOTOS"
+id = "2e73ed962475440fb4a7edc35981cf78"

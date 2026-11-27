@@ -24,6 +24,10 @@
   ],
   "exclude": [
     "tests/worker.test.ts",
-    "tests/worker-hardening.test.ts"
+    "tests/worker-hardening.test.ts",
+    "tests/reports-exif.test.ts",
+    "tests/reports-validate.test.ts",
+    "tests/reports-corrections.test.ts",
+    "tests/reports-worker.test.ts"
   ]
 }

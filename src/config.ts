@@ -19,4 +19,13 @@ export const config = {
   cityCenter: [-122.4425, 37.7599] as [number, number],
   cityZoom: 12,
   alertLeadMin: 60,
+  /**
+   * Photo reports (issue #10). Off unless VITE_PHOTO_REPORTS is "1" or "true".
+   * Leave this unset in production so the Report a sign button stays hidden even if the frontend is redeployed.
+   */
+  photoReports: import.meta.env.VITE_PHOTO_REPORTS === "1" || import.meta.env.VITE_PHOTO_REPORTS === "true",
+  reportsApiBase: import.meta.env.VITE_REPORTS_API_BASE || "",
+  /** Optional. Empty in v1: the form does not load or render a Turnstile widget. */
+  turnstileSiteKey: import.meta.env.VITE_TURNSTILE_SITE_KEY || "",
 };
+
